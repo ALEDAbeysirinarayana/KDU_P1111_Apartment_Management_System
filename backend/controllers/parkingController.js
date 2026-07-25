@@ -49,10 +49,9 @@ const getMyParkingSlots = async (req, res) => {
   try {
     const unitId = await getResidentUnitId(userId, role);
     if (!unitId) {
-      return res.status(400).json({ message: 'No unit associated with your account.' });
+      return res.status(200).json([]); // Return empty instead of error
     }
 
-    // Fetch permanent slot and approved guest slots
     const [slots] = await pool.query(
       'SELECT * FROM parking_management WHERE unit_id = ? AND (type = "permanent" OR status = "approved")',
       [unitId]
@@ -65,11 +64,37 @@ const getMyParkingSlots = async (req, res) => {
   }
 };
 
+// @desc    Get visitor parking requests for logged-in resident
+// @route   GET /api/parking/my-visitor-requests
+// @access  Private (Homeowner / Tenant)
+const getMyVisitorRequests = async (req, res) => {
+  const { id: userId, role } = req.user;
+
+  try {
+    const unitId = await getResidentUnitId(userId, role);
+    if (!unitId) {
+      return res.status(200).json([]);
+    }
+
+    const [requests] = await pool.query(
+      `SELECT * FROM parking_management 
+       WHERE unit_id = ? AND type = 'guest'
+       ORDER BY created_at DESC`,
+      [unitId]
+    );
+
+    return res.status(200).json(requests);
+  } catch (error) {
+    console.error('Get my visitor requests error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 // @desc    Request guest parking
 // @route   POST /api/parking/request-guest
 // @access  Private (Homeowner / Tenant)
 const requestGuestParking = async (req, res) => {
-  const { slot_number, guest_date } = req.body;
+  const { slot_number, guest_date, visitor_name, visitor_vehicle, arrival_time, reason } = req.body;
   const { id: userId, role } = req.user;
 
   try {
@@ -82,9 +107,6 @@ const requestGuestParking = async (req, res) => {
       return res.status(400).json({ message: 'Only residents associated with a unit can request guest parking.' });
     }
 
-    // Verify slot is configured as a guest slot
-    // In our system, guest slot templates are pre-seeded (e.g. status='approved' and type='guest')
-    // We check if there's any active booking for this slot on this date
     const [existingBookings] = await pool.query(
       'SELECT id, status FROM parking_management WHERE slot_number = ? AND guest_date = ?',
       [slot_number, guest_date]
@@ -95,10 +117,11 @@ const requestGuestParking = async (req, res) => {
       return res.status(400).json({ message: 'This guest parking slot is already requested or approved for this date.' });
     }
 
-    // Insert new guest parking request
     await pool.query(
-      'INSERT INTO parking_management (unit_id, slot_number, type, guest_date, status) VALUES (?, ?, "guest", ?, "pending")',
-      [unitId, slot_number, guest_date]
+      `INSERT INTO parking_management 
+       (unit_id, slot_number, type, guest_date, visitor_name, visitor_vehicle, arrival_time, reason, status) 
+       VALUES (?, ?, 'guest', ?, ?, ?, ?, ?, 'pending')`,
+      [unitId, slot_number, guest_date, visitor_name || null, visitor_vehicle || null, arrival_time || null, reason || null]
     );
 
     return res.status(201).json({ message: 'Guest parking request submitted successfully.' });
@@ -113,21 +136,19 @@ const requestGuestParking = async (req, res) => {
 // @access  Private (Admin / Staff)
 const approveGuestParking = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // 'approved' or 'rejected'
+  const { status } = req.body;
 
   try {
     if (!status || !['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Valid status (approved/rejected) is required.' });
     }
 
-    // Find the guest parking request
     const [request] = await pool.query('SELECT * FROM parking_management WHERE id = ? AND type = "guest"', [id]);
     if (request.length === 0) {
       return res.status(404).json({ message: 'Guest parking request not found.' });
     }
 
     if (status === 'approved') {
-      // Check if slot has another approved request on the same date
       const [alreadyApproved] = await pool.query(
         'SELECT id FROM parking_management WHERE slot_number = ? AND guest_date = ? AND status = "approved" AND id != ?',
         [request[0].slot_number, request[0].guest_date, id]
@@ -138,8 +159,6 @@ const approveGuestParking = async (req, res) => {
       }
 
       await pool.query('UPDATE parking_management SET status = "approved" WHERE id = ?', [id]);
-      
-      // Automatically reject other pending requests for the same slot on the same date
       await pool.query(
         'UPDATE parking_management SET status = "rejected" WHERE slot_number = ? AND guest_date = ? AND status = "pending" AND id != ?',
         [request[0].slot_number, request[0].guest_date, id]
@@ -158,6 +177,7 @@ const approveGuestParking = async (req, res) => {
 module.exports = {
   getParkingSlots,
   getMyParkingSlots,
+  getMyVisitorRequests,
   requestGuestParking,
   approveGuestParking
 };

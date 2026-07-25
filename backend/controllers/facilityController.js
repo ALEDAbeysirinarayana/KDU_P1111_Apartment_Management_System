@@ -4,7 +4,7 @@ const pool = require('../config/db');
 // @route   POST /api/facilities/reserve
 // @access  Private (Homeowner / Tenant)
 const reserveFacility = async (req, res) => {
-  const { facility_name, date } = req.body;
+  const { facility_name, date, purpose, participants, notes, time_slot } = req.body;
   const userId = req.user.id;
 
   try {
@@ -22,10 +22,9 @@ const reserveFacility = async (req, res) => {
       return res.status(400).json({ message: 'This facility is already reserved and approved for this date.' });
     }
 
-    // Insert reservation request (pending by default)
     const [result] = await pool.query(
-      'INSERT INTO facility_reservations (user_id, facility_name, date, status) VALUES (?, ?, ?, ?)',
-      [userId, facility_name, date, 'pending']
+      'INSERT INTO facility_reservations (user_id, facility_name, date, purpose, participants, notes, time_slot, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, facility_name, date, purpose || null, participants ? parseInt(participants) : 1, notes || null, time_slot || null, 'pending']
     );
 
     return res.status(201).json({
@@ -34,6 +33,54 @@ const reserveFacility = async (req, res) => {
     });
   } catch (error) {
     console.error('Reserve facility error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Get facility stats for logged-in user
+// @route   GET /api/facilities/stats
+// @access  Private
+const getFacilityStats = async (req, res) => {
+  const { id: userId, role } = req.user;
+  try {
+    const isAdmin = role === 'admin' || role === 'staff';
+    const userFilter = isAdmin ? '' : `WHERE r.user_id = ${pool.escape(userId)}`;
+    const userFilterAnd = isAdmin ? '' : `AND r.user_id = ${pool.escape(userId)}`;
+
+    const [[totals]] = await pool.query(`
+      SELECT
+        COUNT(*) AS totalBookings,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pendingBookings,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approvedBookings,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejectedBookings
+      FROM facility_reservations r
+      ${userFilter}
+    `);
+
+    // Visitor parking stats (guest slots for this user's unit)
+    let parkingTotals = { pendingVisitor: 0, approvedVisitor: 0 };
+    if (!isAdmin) {
+      const [[pt]] = await pool.query(`
+        SELECT
+          SUM(CASE WHEN p.status = 'pending' THEN 1 ELSE 0 END) AS pendingVisitor,
+          SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS approvedVisitor
+        FROM parking_management p
+        JOIN units u ON p.unit_id = u.id
+        WHERE (u.owner_id = ? OR u.tenant_id = ?) AND p.type = 'guest'
+      `, [userId, userId]);
+      parkingTotals = { pendingVisitor: pt.pendingVisitor || 0, approvedVisitor: pt.approvedVisitor || 0 };
+    }
+
+    return res.status(200).json({
+      totalBookings: totals.totalBookings || 0,
+      pendingBookings: totals.pendingBookings || 0,
+      approvedBookings: totals.approvedBookings || 0,
+      rejectedBookings: totals.rejectedBookings || 0,
+      pendingVisitorParking: parkingTotals.pendingVisitor,
+      approvedVisitorParking: parkingTotals.approvedVisitor,
+    });
+  } catch (error) {
+    console.error('Get facility stats error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
   }
 };
@@ -49,7 +96,6 @@ const getReservations = async (req, res) => {
     let params = [];
 
     if (role === 'admin' || role === 'staff') {
-      // Admin/Staff see all reservations with joined resident details
       query = `
         SELECT 
           r.*, 
@@ -62,7 +108,6 @@ const getReservations = async (req, res) => {
         ORDER BY r.date DESC
       `;
     } else {
-      // Residents see only their own reservations
       query = `
         SELECT r.*, u.full_name AS resident_name
         FROM facility_reservations r
@@ -75,7 +120,6 @@ const getReservations = async (req, res) => {
 
     const [reservations] = await pool.query(query, params);
 
-    // Calculate dynamic stats metrics
     const [[facCount]] = await pool.query('SELECT COUNT(*) AS count FROM facilities');
     const [[activeCount]] = await pool.query('SELECT COUNT(*) AS count FROM facility_reservations WHERE status = "approved"');
     const [[pendingCount]] = await pool.query('SELECT COUNT(*) AS count FROM facility_reservations WHERE status = "pending"');
@@ -101,14 +145,13 @@ const getReservations = async (req, res) => {
 // @access  Private (Admin / Staff)
 const approveReservation = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // 'approved' or 'rejected'
+  const { status } = req.body;
 
   try {
     if (!status || !['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Valid status (approved/rejected) is required.' });
     }
 
-    // Check if reservation exists
     const [reservation] = await pool.query('SELECT * FROM facility_reservations WHERE id = ?', [id]);
     if (reservation.length === 0) {
       return res.status(404).json({ message: 'Reservation not found.' });
@@ -117,7 +160,6 @@ const approveReservation = async (req, res) => {
     const targetReservation = reservation[0];
 
     if (status === 'approved') {
-      // Make sure there is no already approved booking on that date
       const [alreadyBooked] = await pool.query(
         'SELECT id FROM facility_reservations WHERE facility_name = ? AND date = ? AND status = "approved" AND id != ?',
         [targetReservation.facility_name, targetReservation.date, id]
@@ -127,16 +169,12 @@ const approveReservation = async (req, res) => {
         return res.status(400).json({ message: 'Cannot approve. Another request is already approved for this date.' });
       }
 
-      // Approve this one
       await pool.query('UPDATE facility_reservations SET status = "approved" WHERE id = ?', [id]);
-
-      // Automatically reject all other pending requests for the same facility on the same date!
       await pool.query(
         'UPDATE facility_reservations SET status = "rejected" WHERE facility_name = ? AND date = ? AND status = "pending" AND id != ?',
         [targetReservation.facility_name, targetReservation.date, id]
       );
     } else {
-      // Just reject
       await pool.query('UPDATE facility_reservations SET status = "rejected" WHERE id = ?', [id]);
     }
 
@@ -214,6 +252,7 @@ const deleteFacility = async (req, res) => {
 
 module.exports = {
   reserveFacility,
+  getFacilityStats,
   getReservations,
   approveReservation,
   getFacilities,

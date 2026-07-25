@@ -37,7 +37,13 @@ export default function ResidentDashboard() {
 
   // Input states
   const [complaintForm, setComplaintForm] = useState({ category: 'Plumbing', subject_title: '', description: '', priority: 'medium', is_emergency: false });
-  const [bookingForm, setBookingForm] = useState({ facility_name: 'Swimming Pool Annex', date: '' });
+  // Facility page state
+  const [facilityList, setFacilityList] = useState([]);
+  const [facilityStats, setFacilityStats] = useState({ totalBookings: 0, pendingBookings: 0, approvedBookings: 0, pendingVisitorParking: 0, approvedVisitorParking: 0 });
+  const [parkingAllSlots, setParkingAllSlots] = useState([]);
+  const [visitorRequests, setVisitorRequests] = useState([]);
+  const [bookingForm, setBookingForm] = useState({ facility_name: '', date: '', purpose: '', participants: '', notes: '', time_slot: '', agreed: false });
+  const [visitorParkingForm, setVisitorParkingForm] = useState({ slot_number: '', guest_date: '', visitor_name: '', visitor_vehicle: '', arrival_time: '', reason: '', agreed: false });
   const [parkingForm, setParkingForm] = useState({ slot_number: '', guest_date: '' });
 
   // Profile Edit Form States
@@ -91,8 +97,24 @@ export default function ResidentDashboard() {
         const list = Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []);
         if (list.length > 0 && !selectedComplaint) setSelectedComplaint(list[0]);
       } else if (activeTab === 'facility') {
-        const resRes = await api.get('/facilities/reservations');
+        const [resRes, statsRes, facRes, allParkRes] = await Promise.all([
+          api.get('/facilities/reservations'),
+          api.get('/facilities/stats'),
+          api.get('/facilities'),
+          api.get('/parking')
+        ]);
         setReservations(Array.isArray(resRes.data) ? resRes.data : (resRes.data.reservations || []));
+        setFacilityStats(statsRes.data || { totalBookings: 0, pendingBookings: 0, approvedBookings: 0, pendingVisitorParking: 0, approvedVisitorParking: 0 });
+        setFacilityList(Array.isArray(facRes.data) ? facRes.data : []);
+        setParkingAllSlots(Array.isArray(allParkRes.data) ? allParkRes.data : []);
+        try {
+          const visRes = await api.get('/parking/my-visitor-requests');
+          setVisitorRequests(Array.isArray(visRes.data) ? visRes.data : []);
+        } catch(e) { setVisitorRequests([]); }
+        try {
+          const myParkRes = await api.get('/parking/my-slots');
+          setMyParking(Array.isArray(myParkRes.data) ? myParkRes.data : []);
+        } catch(e) { setMyParking([]); }
       } else if (activeTab === 'notices') {
         const noticesRes = await api.get('/notices');
         setNotices(noticesRes.data.notices || []);
@@ -163,17 +185,64 @@ export default function ResidentDashboard() {
   // Request Facility Booking
   const handleReserve = async (e) => {
     e.preventDefault();
+    if (!bookingForm.agreed) {
+      setErrorMsg('Please agree to the facility usage guidelines before submitting.');
+      setTimeout(() => setErrorMsg(''), 4000);
+      return;
+    }
     try {
       await api.post('/facilities/reserve', bookingForm);
       setSuccessMsg('Facility reservation request submitted. Pending review.');
-      setBookingForm({ facility_name: 'Swimming Pool Annex', date: '' });
-      setActiveTab('dashboard');
+      setBookingForm({ facility_name: '', date: '', purpose: '', participants: '', notes: '', time_slot: '', agreed: false });
+      // Refresh in-place
+      const [resRes, statsRes] = await Promise.all([
+        api.get('/facilities/reservations'),
+        api.get('/facilities/stats'),
+      ]);
+      setReservations(Array.isArray(resRes.data) ? resRes.data : (resRes.data.reservations || []));
+      setFacilityStats(statsRes.data || {});
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Reservation failed');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
+
+  // Request Visitor Parking
+  const handleVisitorParking = async (e) => {
+    e.preventDefault();
+    if (!visitorParkingForm.agreed) {
+      setErrorMsg('Please accept the visitor parking terms before submitting.');
+      setTimeout(() => setErrorMsg(''), 4000);
+      return;
+    }
+    try {
+      await api.post('/parking/request-guest', {
+        slot_number: visitorParkingForm.slot_number,
+        guest_date: visitorParkingForm.guest_date,
+        visitor_name: visitorParkingForm.visitor_name,
+        visitor_vehicle: visitorParkingForm.visitor_vehicle,
+        arrival_time: visitorParkingForm.arrival_time,
+        reason: visitorParkingForm.reason,
+      });
+      setSuccessMsg('Visitor parking request submitted. Pending approval.');
+      setVisitorParkingForm({ slot_number: '', guest_date: '', visitor_name: '', visitor_vehicle: '', arrival_time: '', reason: '', agreed: false });
+      // Refresh visitor requests and stats
+      const [visRes, statsRes, allParkRes] = await Promise.all([
+        api.get('/parking/my-visitor-requests'),
+        api.get('/facilities/stats'),
+        api.get('/parking'),
+      ]);
+      setVisitorRequests(Array.isArray(visRes.data) ? visRes.data : []);
+      setFacilityStats(statsRes.data || {});
+      setParkingAllSlots(Array.isArray(allParkRes.data) ? allParkRes.data : []);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Visitor parking request failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
 
   // Request Guest Parking
   const handleRequestParking = async (e) => {
@@ -1219,89 +1288,688 @@ export default function ResidentDashboard() {
             );
           })()}
 
-          {/* 3.3 activeTab = FACILITY (Filing & history) */}
-          {activeTab === 'facility' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Form */}
-              <div className="lg:col-span-1 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm h-fit">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Request Facility Booking</h3>
-                <form onSubmit={handleReserve} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Facility Area</label>
-                    <div className="relative">
-                      <select
-                        required
-                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                        value={bookingForm.facility_name}
-                        onChange={(e) => setBookingForm({ ...bookingForm, facility_name: e.target.value })}
+          {/* 3.3 activeTab = FACILITY */}
+          {activeTab === 'facility' && (() => {
+            // Derived: 7-day availability calendar (current week)
+            const today = new Date();
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
+            const weekDays = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date(weekStart);
+              d.setDate(weekStart.getDate() + i);
+              return d;
+            });
+            const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+            const getSlotStatus = (facilityName, date) => {
+              const dateStr = date.toISOString().split('T')[0];
+              const match = reservations.find(r =>
+                r.facility_name === facilityName &&
+                new Date(r.date).toISOString().split('T')[0] === dateStr
+              );
+              if (!match) return 'available';
+              if (match.status === 'approved') return 'booked';
+              if (match.status === 'pending') return 'pending';
+              return 'available';
+            };
+
+            // Facility gradient colors
+            const facGradients = [
+              'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+              'linear-gradient(135deg, #0d1b2a 0%, #1b4332 100%)',
+              'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
+              'linear-gradient(135deg, #1e3a5f 0%, #133fbd 100%)',
+            ];
+            const facEmojis = ['🏊', '🌿', '💼', '🏟️', '🎾', '🎱', '🍽️'];
+
+            // Permanent parking slot
+            const permanentSlot = myParking.find(s => s.type === 'permanent');
+
+            // Guest slot options from all parking slots
+            const guestSlotOptions = [...new Set(parkingAllSlots.filter(p => p.type === 'guest').map(p => p.slot_number))];
+            const guestSlotAvailability = (slot) => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              return !parkingAllSlots.some(p =>
+                p.slot_number === slot &&
+                p.guest_date &&
+                new Date(p.guest_date).toISOString().split('T')[0] === todayStr &&
+                ['approved', 'pending'].includes(p.status)
+              );
+            };
+
+            const statusBadge = (s) => {
+              const map = { approved: 'bg-emerald-50 text-emerald-700', pending: 'bg-amber-50 text-amber-700', rejected: 'bg-red-50 text-red-700' };
+              return map[s] || map.pending;
+            };
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* LEFT + CENTER: Main Content */}
+                <div className="lg:col-span-2 space-y-5">
+
+                  {/* Stats Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      {
+                        label: 'Total Facility Bookings',
+                        value: facilityStats.totalBookings || 0,
+                        sub: `UPCOMING FACILITY: ${facilityStats.approvedBookings || 0}`,
+                        subColor: 'text-blue-500',
+                        icon: '🏛️',
+                        highlight: facilityStats.pendingBookings > 0
+                      },
+                      {
+                        label: 'Pending Visitor Parking',
+                        value: facilityStats.pendingVisitorParking || 0,
+                        sub: 'Awaiting approval',
+                        subColor: 'text-amber-500',
+                        icon: '🅿️',
+                        highlight: false
+                      },
+                      {
+                        label: 'Approved Visitor Parking',
+                        value: facilityStats.approvedVisitorParking || 0,
+                        sub: `Approved slots`,
+                        subColor: 'text-emerald-500',
+                        icon: '✅',
+                        highlight: false
+                      },
+                    ].map((s, i) => (
+                      <div key={i} className="bg-white border border-slate-200/60 p-4 rounded-xl shadow-sm">
+                        <div className="flex items-start justify-between">
+                          <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider leading-tight">{s.label}</p>
+                          <span className="text-lg">{s.icon}</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800 mt-1">{String(s.value).padStart(2, '0')}</h3>
+                        <p className={`text-[9px] font-bold mt-1 ${s.subColor}`}>{s.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Available Facilities */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-black text-slate-800">Available Facilities</h3>
+                      <span className="text-[10px] font-bold text-blue-600 cursor-pointer hover:underline">View All</span>
+                    </div>
+                    {facilityList.length === 0 ? (
+                      <div className="px-5 pb-5">
+                        <p className="text-slate-400 text-xs italic">No facilities configured yet.</p>
+                      </div>
+                    ) : (
+                      <div className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {facilityList.slice(0, 3).map((fac, i) => (
+                          <div key={fac.id} className="rounded-xl overflow-hidden border border-slate-100 shadow-sm group">
+                            <div
+                              className="h-24 flex flex-col items-center justify-center relative"
+                              style={{ background: facGradients[i % facGradients.length] }}
+                            >
+                              <span className="text-3xl mb-1">{facEmojis[i % facEmojis.length]}</span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                fac.status === 'available' ? 'bg-emerald-500/80 text-white' :
+                                fac.status === 'maintenance' ? 'bg-amber-500/80 text-white' :
+                                'bg-red-500/80 text-white'
+                              }`}>
+                                {fac.status === 'available' ? '● Available' : fac.status === 'maintenance' ? '⚠ Maintenance' : '✕ Fully Booked'}
+                              </span>
+                            </div>
+                            <div className="p-3 bg-white">
+                              <p className="text-[11px] font-black text-slate-800 leading-tight">{fac.name}</p>
+                              <p className="text-[9px] text-slate-400 font-medium mt-0.5">Capacity: {fac.capacity} Persons</p>
+                              <button
+                                onClick={() => {
+                                  setBookingForm(f => ({ ...f, facility_name: fac.name }));
+                                  document.getElementById('facility-booking-form')?.scrollIntoView({ behavior: 'smooth' });
+                                }}
+                                disabled={fac.status !== 'available'}
+                                className={`mt-2 w-full py-1.5 text-[9px] font-bold rounded-lg transition cursor-pointer ${
+                                  fac.status === 'available'
+                                    ? 'bg-[#133fbd] hover:bg-[#0f3299] text-white'
+                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                }`}
+                              >
+                                Request Booking
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Booking Availability Calendar */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-black text-slate-800">Booking Availability</h3>
+                      <div className="flex items-center gap-3 text-[9px] font-bold">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> Available</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Booked</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Pending</span>
+                      </div>
+                    </div>
+                    {facilityList.length === 0 ? (
+                      <p className="text-slate-400 text-xs italic">No facilities to display.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-bold text-[9px] uppercase tracking-wider">
+                              <th className="pb-2 text-left pr-3 w-24">Facility</th>
+                              {dayLabels.map((d, i) => (
+                                <th key={i} className="pb-2 text-center w-12">
+                                  <span>{d}</span>
+                                  <br />
+                                  <span className={`text-[8px] font-medium ${weekDays[i].toDateString() === today.toDateString() ? 'text-blue-600 font-black' : 'text-slate-300'}`}>
+                                    {weekDays[i].getDate()}
+                                  </span>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {facilityList.slice(0, 4).map((fac) => (
+                              <tr key={fac.id}>
+                                <td className="py-2 pr-3 font-semibold text-slate-700 text-[10px] truncate max-w-[90px]">{fac.name.split(' ')[0]}</td>
+                                {weekDays.map((day, di) => {
+                                  const slotStatus = getSlotStatus(fac.name, day);
+                                  return (
+                                    <td key={di} className="py-2 text-center">
+                                      <span className={`inline-block w-7 h-5 rounded text-[7px] font-bold leading-5 ${
+                                        slotStatus === 'booked' ? 'bg-red-100 text-red-600' :
+                                        slotStatus === 'pending' ? 'bg-amber-100 text-amber-600' :
+                                        'bg-emerald-100 text-emerald-600'
+                                      }`}>
+                                        {slotStatus === 'booked' ? '✕' : slotStatus === 'pending' ? '◑' : '✓'}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Facility Booking Request Form */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-6" id="facility-booking-form">
+                    <div className="mb-5">
+                      <h3 className="text-sm font-black text-slate-800">Facility Booking Request Form</h3>
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">Complete all required fields to submit your booking request for review.</p>
+                    </div>
+                    <form onSubmit={handleReserve} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Facility</label>
+                          <div className="relative">
+                            <select
+                              required
+                              className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                              value={bookingForm.facility_name}
+                              onChange={(e) => setBookingForm({ ...bookingForm, facility_name: e.target.value })}
+                            >
+                              <option value="">Select Facility</option>
+                              {facilityList.filter(f => f.status === 'available').map(f => (
+                                <option key={f.id} value={f.name}>{f.name}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Date</label>
+                          <input
+                            type="date"
+                            required
+                            min={new Date().toISOString().split('T')[0]}
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium"
+                            value={bookingForm.date}
+                            onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">No. of Participants</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="e.g. 10"
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium"
+                            value={bookingForm.participants}
+                            onChange={(e) => setBookingForm({ ...bookingForm, participants: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Time Slot</label>
+                          <div className="relative">
+                            <select
+                              className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                              value={bookingForm.time_slot}
+                              onChange={(e) => setBookingForm({ ...bookingForm, time_slot: e.target.value })}
+                            >
+                              <option value="">Select Time Slot</option>
+                              <option value="06:00 - 09:00">06:00 – 09:00 AM</option>
+                              <option value="09:00 - 12:00">09:00 AM – 12:00 PM</option>
+                              <option value="12:00 - 15:00">12:00 – 03:00 PM</option>
+                              <option value="15:00 - 18:00">03:00 – 06:00 PM</option>
+                              <option value="18:00 - 21:00">06:00 – 09:00 PM</option>
+                            </select>
+                            <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Purpose of Booking</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Family Dinner, Team Meeting, Birthday Party..."
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium"
+                          value={bookingForm.purpose}
+                          onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Additional Notes</label>
+                        <textarea
+                          rows={3}
+                          placeholder="Special requirements or additional information for the management team..."
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium font-sans resize-none"
+                          value={bookingForm.notes}
+                          onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })}
+                        />
+                      </div>
+                      <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        bookingForm.agreed ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200 hover:border-blue-200'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-blue-600 cursor-pointer"
+                          checked={bookingForm.agreed}
+                          onChange={(e) => setBookingForm({ ...bookingForm, agreed: e.target.checked })}
+                        />
+                        <span className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                          I have read and agree to the <span className="text-blue-600 font-bold">Facility Usage Guidelines</span> and understand that I will be held responsible for any damages caused to the facility during the booking period.
+                        </span>
+                      </label>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
                       >
-                        <option value="Swimming Pool Annex">Swimming Pool Annex</option>
-                        <option value="Clubhouse Hall">Clubhouse Hall</option>
-                        <option value="Rooftop Lounge">Rooftop Lounge</option>
-                        <option value="Tennis Court">Tennis Court</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                        Submit Booking Request
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* My Facility Booking Requests */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 pt-5 pb-3">
+                      <h3 className="text-sm font-black text-slate-800">My Facility Booking Requests</h3>
+                    </div>
+                    {reservations.length === 0 ? (
+                      <div className="px-5 pb-5">
+                        <p className="text-slate-400 text-xs italic">No bookings placed yet.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-600">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                              <th className="px-5 py-3">Facility</th>
+                              <th className="px-5 py-3">Date &amp; Time</th>
+                              <th className="px-5 py-3">Purpose</th>
+                              <th className="px-5 py-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {reservations.map((res) => (
+                              <tr key={res.id} className="hover:bg-slate-50/50">
+                                <td className="px-5 py-3 font-bold text-slate-800">{res.facility_name}</td>
+                                <td className="px-5 py-3 text-slate-500 font-medium">
+                                  {new Date(res.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  {res.time_slot && <span className="block text-[10px] text-slate-400">{res.time_slot}</span>}
+                                </td>
+                                <td className="px-5 py-3 text-slate-400 font-medium truncate max-w-[120px]">
+                                  {res.purpose || '—'}
+                                </td>
+                                <td className="px-5 py-3">
+                                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${statusBadge(res.status)}`}>
+                                    {res.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── VISITOR PARKING SECTION ─────────────────────── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                    {/* My Assigned Parking Slot */}
+                    <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)' }}>
+                      <div className="p-5">
+                        <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider mb-3">My Assigned Parking Slot</p>
+                        {permanentSlot ? (
+                          <>
+                            <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Slot Number</p>
+                            <h2 className="text-5xl font-black text-white mt-1 mb-3 tracking-widest">
+                              {permanentSlot.slot_number}
+                            </h2>
+                            <div className="space-y-1.5 text-[10px] text-white/60 font-medium">
+                              {user?.vehicle_number && <p>🚗 {user.vehicle_number}</p>}
+                              <p>📍 {permanentSlot.unit_id ? `Unit ${permanentSlot.unit_id}` : 'Assigned'}</p>
+                              <p className="text-emerald-400 font-bold">● Active</p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <h2 className="text-4xl font-black text-white/30 mt-1 mb-3">N/A</h2>
+                            <p className="text-[10px] text-white/40 font-medium">No permanent slot assigned to your unit yet.</p>
+                          </>
+                        )}
+                        {user?.vehicle_number === null || user?.vehicle_number === '' ? (
+                          <button className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg cursor-pointer transition">
+                            Update Vehicle Number
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Visitor Parking Availability */}
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-black text-slate-800">Visitor Parking Availability</h3>
+                        <div className="flex items-center gap-2 text-[9px] font-bold">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-400 inline-block"></span> Free</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-400 inline-block"></span> Taken</span>
+                        </div>
+                      </div>
+                      {guestSlotOptions.length === 0 ? (
+                        <p className="text-slate-400 text-xs italic">No guest parking slots configured.</p>
+                      ) : (
+                        <div className="grid grid-cols-4 gap-2">
+                          {guestSlotOptions.map((slot, i) => {
+                            const isAvail = guestSlotAvailability(slot);
+                            return (
+                              <div
+                                key={i}
+                                className={`rounded-lg p-2 text-center cursor-pointer transition ${
+                                  isAvail
+                                    ? 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-red-50 border border-red-200'
+                                }`}
+                                onClick={() => isAvail && setVisitorParkingForm(f => ({ ...f, slot_number: slot }))}
+                              >
+                                <p className="text-[8px] font-bold text-slate-500">SLOT</p>
+                                <p className={`text-xs font-black ${isAvail ? 'text-emerald-700' : 'text-red-600'}`}>{slot}</p>
+                              </div>
+                            );
+                          })}
+                          {/* Show placeholder slots if none seeded yet */}
+                          {guestSlotOptions.length === 0 && ['A1','A2','A3','A4','B1','B2','B3','B4'].map((s,i) => (
+                            <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                              <p className="text-[8px] font-bold text-slate-400">SLOT</p>
+                              <p className="text-xs font-black text-slate-300">{s}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Date</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium transition-all"
-                      value={bookingForm.date}
-                      onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                  >
-                    Request Reservation
-                  </button>
-                </form>
-              </div>
 
-              {/* Booking logs */}
-              <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">My Bookings</h3>
-                {reservations.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No bookings placed yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Facility</th>
-                          <th className="pb-3">Scheduled Date</th>
-                          <th className="pb-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {reservations.map((res) => (
-                          <tr key={res.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-bold text-slate-800">{res.facility_name}</td>
-                            <td className="py-3 text-slate-400 font-semibold">
-                              {new Date(res.date).toLocaleDateString()}
-                            </td>
-                            <td className="py-3">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                res.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
-                                res.status === 'pending' ? 'bg-amber-50 text-amber-700' :
-                                'bg-red-50 text-red-700'
-                              }`}>
-                                {res.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  {/* Visitor Parking Request Form */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-6">
+                    <div className="mb-5">
+                      <h3 className="text-sm font-black text-slate-800">Visitor Parking Request Form</h3>
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit a visitor parking request for your guests.</p>
+                    </div>
+                    <form onSubmit={handleVisitorParking} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Visitor Name</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Full name of your visitor"
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium"
+                            value={visitorParkingForm.visitor_name}
+                            onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, visitor_name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Vehicle Number</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. ABC-1234"
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium uppercase"
+                            value={visitorParkingForm.visitor_vehicle}
+                            onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, visitor_vehicle: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Date of Visit</label>
+                          <input
+                            type="date"
+                            required
+                            min={new Date().toISOString().split('T')[0]}
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium"
+                            value={visitorParkingForm.guest_date}
+                            onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, guest_date: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Arrival Time</label>
+                          <input
+                            type="time"
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium"
+                            value={visitorParkingForm.arrival_time}
+                            onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, arrival_time: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Parking Slot</label>
+                        <div className="relative">
+                          <select
+                            required
+                            className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                            value={visitorParkingForm.slot_number}
+                            onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, slot_number: e.target.value })}
+                          >
+                            <option value="">Select a guest slot</option>
+                            {guestSlotOptions.map((s, i) => (
+                              <option key={i} value={s}>{s} {guestSlotAvailability(s) ? '(Available)' : '(Taken today)'}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Reason for Visit</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Personal visit, Delivery, Contractor"
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium"
+                          value={visitorParkingForm.reason}
+                          onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, reason: e.target.value })}
+                        />
+                      </div>
+                      <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                        visitorParkingForm.agreed ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200 hover:border-blue-200'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-blue-600 cursor-pointer"
+                          checked={visitorParkingForm.agreed}
+                          onChange={(e) => setVisitorParkingForm({ ...visitorParkingForm, agreed: e.target.checked })}
+                        />
+                        <span className="text-[10px] font-semibold text-slate-500 leading-relaxed">
+                          I confirm the visitor details and accept responsibility for their conduct within the premises. I understand visitor parking is subject to availability.
+                        </span>
+                      </label>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                      >
+                        Submit Parking Request
+                      </button>
+                    </form>
                   </div>
-                )}
+
+                  {/* My Visitor Parking Requests */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 pt-5 pb-3">
+                      <h3 className="text-sm font-black text-slate-800">My Visitor Parking Requests</h3>
+                    </div>
+                    {visitorRequests.length === 0 ? (
+                      <div className="px-5 pb-5">
+                        <p className="text-slate-400 text-xs italic">No visitor parking requests yet.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-600">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                              <th className="px-5 py-3">#</th>
+                              <th className="px-5 py-3">Visitor</th>
+                              <th className="px-5 py-3">Date</th>
+                              <th className="px-5 py-3">Status</th>
+                              <th className="px-5 py-3">Slot #</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {visitorRequests.map((req, i) => (
+                              <tr key={req.id} className="hover:bg-slate-50/50">
+                                <td className="px-5 py-3 font-bold text-slate-400 text-[10px]">{String(i + 1).padStart(2, '0')}</td>
+                                <td className="px-5 py-3">
+                                  <p className="font-bold text-slate-800 text-[11px]">{req.visitor_name || '—'}</p>
+                                  {req.visitor_vehicle && <p className="text-[10px] text-slate-400">{req.visitor_vehicle}</p>}
+                                </td>
+                                <td className="px-5 py-3 text-slate-500 font-medium">
+                                  {req.guest_date ? new Date(req.guest_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                  {req.arrival_time && <span className="block text-[10px] text-slate-400">{req.arrival_time}</span>}
+                                </td>
+                                <td className="px-5 py-3">
+                                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${statusBadge(req.status)}`}>
+                                    {req.status}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 font-black text-blue-700">{req.slot_number}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* RIGHT SIDEBAR */}
+                <div className="space-y-4">
+
+                  {/* Facility Guidelines */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <FileText className="w-3.5 h-3.5 text-blue-600" />
+                      </div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Facility Guidelines</h3>
+                    </div>
+                    <ul className="space-y-2">
+                      {[
+                        'Bookings must be made at least 48 hours in advance',
+                        'Maximum booking duration is 4 hours per session',
+                        'Residents must supervise all guests during usage',
+                        'Clean up the facility after use — leave no trace',
+                        'Damages will be charged to the resident\'s account',
+                      ].map((rule, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[10px] text-slate-500 font-medium leading-relaxed">
+                          <span className="text-blue-400 font-black mt-0.5 shrink-0">→</span>
+                          {rule}
+                        </li>
+                      ))}
+                    </ul>
+                    <button className="mt-4 w-full py-2 border border-blue-200 text-blue-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-blue-50 transition flex items-center justify-center gap-1.5">
+                      <FileText className="w-3 h-3" /> Rules PDF
+                    </button>
+                  </div>
+
+                  {/* Parking Policies */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center">
+                        <span className="text-sm">🅿️</span>
+                      </div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Parking Policies</h3>
+                    </div>
+                    <ul className="space-y-2">
+                      {[
+                        'Visitor parking is limited to a maximum of 4 hours',
+                        'Residents must submit a request 24 hrs before arrival',
+                        'Unauthorized vehicles will be clamped without notice',
+                      ].map((rule, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[10px] text-slate-500 font-medium leading-relaxed">
+                          <span className="text-slate-400 font-black mt-0.5 shrink-0">→</span>
+                          {rule}
+                        </li>
+                      ))}
+                    </ul>
+                    <button className="mt-4 w-full py-2 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1.5">
+                      <FileText className="w-3 h-3" /> Parking Policy PDF
+                    </button>
+                  </div>
+
+                  {/* Recent Notifications */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-4">Recent Notifications</h3>
+                    {reservations.length === 0 && visitorRequests.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No recent activity.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {[...reservations, ...visitorRequests]
+                          .sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
+                          .slice(0, 3)
+                          .map((item, i) => (
+                            <div key={i} className="flex items-start gap-3 pb-3 border-b border-slate-50 last:border-0 last:pb-0">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                                item.status === 'approved' ? 'bg-emerald-100' :
+                                item.status === 'pending' ? 'bg-amber-100' : 'bg-red-100'
+                              }`}>
+                                <span className="text-xs">
+                                  {item.status === 'approved' ? '✓' : item.status === 'pending' ? '⏳' : '✕'}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-bold text-slate-800 truncate">
+                                  {item.facility_name ? `Booking: ${item.facility_name}` : `Visitor Parking: ${item.slot_number}`}
+                                </p>
+                                <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                                  {item.date
+                                    ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                    : item.guest_date
+                                    ? new Date(item.guest_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                    : '—'}
+                                </p>
+                                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full ${statusBadge(item.status)}`}>
+                                  {item.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
+
 
           {/* 3.4 activeTab = PAYMENTS */}
           {activeTab === 'payments' && (
