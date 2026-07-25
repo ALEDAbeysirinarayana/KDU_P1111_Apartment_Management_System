@@ -9,7 +9,11 @@ const {
   getAdminDashboardStats,
   getApprovedResidents,
   getResidentDashboardStats,
-  updateProfile
+  updateProfile,
+  getAllUsers,
+  adminCreateUser,
+  updateUserStatus,
+  deleteUser
 } = require('../controllers/authController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
@@ -22,5 +26,10 @@ router.get('/admin-dashboard-stats', verifyToken, getAdminDashboardStats);
 router.get('/residents', verifyToken, getApprovedResidents);
 router.get('/resident-dashboard-stats', verifyToken, getResidentDashboardStats);
 router.put('/profile', verifyToken, updateProfile);
+
+router.get('/users', verifyToken, getAllUsers);
+router.post('/users', verifyToken, adminCreateUser);
+router.put('/users/:id/status', verifyToken, updateUserStatus);
+router.delete('/users/:id', verifyToken, deleteUser);
 
 module.exports = router;

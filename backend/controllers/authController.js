@@ -639,6 +639,177 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Get all users (filtered and paginated)
+// @route   GET /api/auth/users
+// @access  Private (Admin / Staff)
+const getAllUsers = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin' && requesterRole !== 'staff') {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
+  try {
+    const { role, status, search, page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let conditions = [];
+    let params = [];
+
+    if (role && role !== 'All' && role !== '') {
+      conditions.push('role = ?');
+      params.push(role.toLowerCase());
+    }
+
+    if (status && status !== 'All' && status !== '') {
+      let mappedStatus = status.toLowerCase();
+      if (mappedStatus === 'active') mappedStatus = 'approved';
+      conditions.push('status = ?');
+      params.push(mappedStatus);
+    }
+
+    if (search && search.trim() !== '') {
+      conditions.push('(full_name LIKE ? OR email LIKE ? OR unit_number LIKE ?)');
+      const searchPattern = `%${search.trim()}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Count total matches
+    const countQuery = `SELECT COUNT(*) AS count FROM users ${whereClause}`;
+    const [countRes] = await pool.query(countQuery, params);
+    const totalMatch = countRes[0]?.count || 0;
+
+    // Fetch users
+    const selectQuery = `
+      SELECT id, email, role, status, created_at, full_name, nic_or_passport, phone_number, building_name, unit_number, vehicle_number 
+      FROM users 
+      ${whereClause} 
+      ORDER BY created_at DESC 
+      LIMIT ? OFFSET ?
+    `;
+    const [users] = await pool.query(selectQuery, [...params, parseInt(limit), parseInt(offset)]);
+
+    // Calculate overall system-wide metrics for the header cards
+    const [metricsRes] = await pool.query(`
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS active,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended
+      FROM users
+    `);
+    const systemMetrics = {
+      total: metricsRes[0]?.total || 0,
+      active: metricsRes[0]?.active || 0,
+      pending: metricsRes[0]?.pending || 0,
+      suspended: metricsRes[0]?.suspended || 0
+    };
+
+    return res.status(200).json({
+      users,
+      total: totalMatch,
+      metrics: systemMetrics
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Admin direct create user
+// @route   POST /api/auth/users
+// @access  Private (Admin only)
+const adminCreateUser = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admin only.' });
+  }
+
+  const { email, password, role, status, full_name, phone_number, building_name, unit_number, vehicle_number } = req.body;
+
+  try {
+    if (!email || !password || !role) {
+      return res.status(400).json({ message: 'Email, password, and role are required.' });
+    }
+
+    // Check if user already exists
+    const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(400).json({ message: 'User with this email already exists.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userStatus = status || 'approved'; // Default to active/approved for admin creation
+
+    await pool.query(
+      `INSERT INTO users (email, password_hash, role, status, full_name, phone_number, building_name, unit_number, vehicle_number) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [email, passwordHash, role, userStatus, full_name || null, phone_number || null, building_name || null, unit_number || null, vehicle_number || null]
+    );
+
+    return res.status(201).json({ message: 'User created successfully.' });
+  } catch (error) {
+    console.error('Admin create user error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Update user status (Approve, Suspend, etc.)
+// @route   PUT /api/auth/users/:id/status
+// @access  Private (Admin / Staff)
+const updateUserStatus = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin' && requesterRole !== 'staff') {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    if (!status || !['pending', 'approved', 'rejected', 'suspended'].includes(status)) {
+      return res.status(400).json({ message: 'Valid status is required.' });
+    }
+
+    const [target] = await pool.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (target.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    await pool.query('UPDATE users SET status = ? WHERE id = ?', [status, id]);
+    return res.status(200).json({ message: `User status updated to ${status}.` });
+  } catch (error) {
+    console.error('Update user status error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Delete user account
+// @route   DELETE /api/auth/users/:id
+// @access  Private (Admin only)
+const deleteUser = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admin only.' });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const [target] = await pool.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (target.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    await pool.query('DELETE FROM users WHERE id = ?', [id]);
+    return res.status(200).json({ message: 'User deleted successfully.' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -648,5 +819,9 @@ module.exports = {
   getAdminDashboardStats,
   getApprovedResidents,
   getResidentDashboardStats,
-  updateProfile
+  updateProfile,
+  getAllUsers,
+  adminCreateUser,
+  updateUserStatus,
+  deleteUser
 };

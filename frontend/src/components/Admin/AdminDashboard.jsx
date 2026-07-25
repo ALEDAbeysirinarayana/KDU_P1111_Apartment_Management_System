@@ -13,6 +13,26 @@ export default function AdminDashboard() {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // User Management State
+  const [users, setUsers] = useState([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersMetrics, setUsersMetrics] = useState({ total: 0, active: 0, pending: 0, suspended: 0 });
+  const [roleFilter, setRoleFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    email: '',
+    password: '',
+    role: 'homeowner',
+    status: 'approved',
+    full_name: '',
+    phone_number: '',
+    building_name: '',
+    unit_number: '',
+    vehicle_number: ''
+  });
+
   // Stats Data
   const [dashboardStats, setDashboardStats] = useState(null);
 
@@ -45,6 +65,19 @@ export default function AdminDashboard() {
         const approvalsRes = await api.get('/auth/pending-approvals');
         setPendingHomeowners(approvalsRes.data.homeowners || []);
         setPendingTenants(approvalsRes.data.tenants || []);
+
+        const usersRes = await api.get('/auth/users', {
+          params: {
+            role: roleFilter === 'All' ? '' : roleFilter,
+            status: statusFilter === 'All' ? '' : statusFilter,
+            search: searchQuery,
+            page: usersPage,
+            limit: 10
+          }
+        });
+        setUsers(usersRes.data.users || []);
+        setUsersTotal(usersRes.data.total || 0);
+        setUsersMetrics(usersRes.data.metrics || { total: 0, active: 0, pending: 0, suspended: 0 });
       } else if (activeTab === 'residents') {
         const res = await api.get('/auth/residents');
         setResidents(res.data);
@@ -80,7 +113,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, roleFilter, statusFilter, searchQuery, usersPage]);
 
   // Handle Approvals
   const handleApproval = async (userId, action) => {
@@ -91,6 +124,56 @@ export default function AdminDashboard() {
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Approval action failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  const handleUpdateStatus = async (userId, newStatus) => {
+    try {
+      await api.put(`/auth/users/${userId}/status`, { status: newStatus });
+      setSuccessMsg(`User status updated to ${newStatus}!`);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update user status');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user account?")) return;
+    try {
+      await api.delete(`/auth/users/${userId}`);
+      setSuccessMsg("User account deleted successfully.");
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to delete user');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  const handleAdminCreateUser = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/auth/users', newUserForm);
+      setSuccessMsg("New user account created successfully!");
+      setShowAddUserModal(false);
+      setNewUserForm({
+        email: '',
+        password: '',
+        role: 'homeowner',
+        status: 'approved',
+        full_name: '',
+        phone_number: '',
+        building_name: '',
+        unit_number: '',
+        vehicle_number: ''
+      });
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to create user');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
@@ -434,20 +517,34 @@ export default function AdminDashboard() {
         
         {/* 2. Top Bar */}
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30">
-          {/* Search bar */}
-          <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search operational records..."
-              className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          {activeTab === 'approvals' ? (
+            <h2 className="font-extrabold text-base text-slate-800 tracking-tight">User & Access Management</h2>
+          ) : (
+            /* Search bar */
+            <div className="relative max-w-sm w-full">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search operational records..."
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          )}
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-4">
+            {activeTab === 'approvals' && (
+              <button 
+                onClick={() => setShowAddUserModal(true)}
+                className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add New User</span>
+              </button>
+            )}
+
             {/* Notification bell */}
             <button className="relative p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
               <Bell className="w-4.5 h-4.5" />
@@ -765,133 +862,306 @@ export default function AdminDashboard() {
 
           {/* 3.2 activeTab = APPROVALS (User & Access) */}
           {activeTab === 'approvals' && (
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
               
-              <div className="mb-4">
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">User & Access Management</h2>
-                <p className="text-xs text-slate-400 font-semibold mt-1">Review homeowner registrations and tenant final approvals.</p>
-              </div>
+              {/* Left Column (Metrics, filters, table, pagination) */}
+              <div className="lg:col-span-3 space-y-6">
+                
+                {/* Metrics Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Users</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{usersMetrics.total.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
 
-              {/* Homeowner Approvals */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Pending Homeowner Applications</h3>
-                {pendingHomeowners.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No pending homeowners.</p>
-                ) : (
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Active Users</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{usersMetrics.active.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5 text-emerald-600" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm border-l-4 border-l-amber-500 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Approvals</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{usersMetrics.pending}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                      <ShieldAlert className="w-5 h-5 text-amber-500" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Suspended Accounts</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{usersMetrics.suspended}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+                      <X className="w-5 h-5 text-rose-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filters card */}
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-center gap-4">
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email or unit..."
+                      className="w-full bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs transition-all"
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setUsersPage(1); }}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap w-full md:w-auto items-center gap-3">
+                    <div className="relative w-full sm:w-36">
+                      <select
+                        className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={roleFilter}
+                        onChange={(e) => { setRoleFilter(e.target.value); setUsersPage(1); }}
+                      >
+                        <option value="All">All Roles</option>
+                        <option value="admin">Admin</option>
+                        <option value="staff">Staff</option>
+                        <option value="maintenance">Maintenance</option>
+                        <option value="homeowner">Homeowner</option>
+                        <option value="tenant">Tenant</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative w-full sm:w-36">
+                      <select
+                        className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={statusFilter}
+                        onChange={(e) => { setStatusFilter(e.target.value); setUsersPage(1); }}
+                      >
+                        <option value="All">All Status</option>
+                        <option value="approved">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setSearchQuery('');
+                        setRoleFilter('All');
+                        setStatusFilter('All');
+                        setUsersPage(1);
+                      }}
+                      className="text-xs font-extrabold text-blue-700 hover:text-blue-500 hover:underline cursor-pointer transition select-none ml-2"
+                    >
+                      Reset Filters
+                    </button>
+                  </div>
+                </div>
+
+                {/* Users Inventory Table */}
+                <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs text-slate-600 min-w-[700px]">
                       <thead>
                         <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3 font-semibold">Full Name</th>
-                          <th className="pb-3 font-semibold">Email</th>
-                          <th className="pb-3 font-semibold">Apartment Info</th>
-                          <th className="pb-3 font-semibold">NIC / Passport</th>
-                          <th className="pb-3 font-semibold">Phone</th>
-                          <th className="pb-3 font-semibold">Date Registered</th>
-                          <th className="pb-3 text-right font-semibold">Actions</th>
+                          <th className="py-3.5 pl-6 w-12"><input type="checkbox" className="rounded border-slate-300" /></th>
+                          <th className="py-3.5 font-semibold">User Name</th>
+                          <th className="py-3.5 font-semibold">Role</th>
+                          <th className="py-3.5 font-semibold">Unit</th>
+                          <th className="py-3.5 font-semibold">Email</th>
+                          <th className="py-3.5 font-semibold">Status</th>
+                          <th className="py-3.5 text-right pr-6 font-semibold">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {pendingHomeowners.map((owner) => (
-                          <tr key={owner.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-bold text-slate-800">{owner.full_name || 'N/A'}</td>
-                            <td className="py-3">{owner.email}</td>
-                            <td className="py-3 font-semibold text-slate-800">
-                              {owner.building_name} - Unit {owner.unit_number} {owner.vehicle_number ? `(${owner.vehicle_number})` : ''}
-                            </td>
-                            <td className="py-3">{owner.nic_or_passport || 'N/A'}</td>
-                            <td className="py-3">{owner.phone_number || 'N/A'}</td>
-                            <td className="py-3 text-slate-400">
-                              {new Date(owner.created_at).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 text-right flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleApproval(owner.id, 'approve')}
-                                className="p-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 transition cursor-pointer"
-                                title="Approve"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleApproval(owner.id, 'reject')}
-                                className="p-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 transition cursor-pointer"
-                                title="Reject"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </td>
+                        {users.length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="py-8 text-center text-slate-400 italic">No registered users matched the active filters.</td>
                           </tr>
-                        ))}
+                        ) : (
+                          users.map((u) => (
+                            <tr key={u.id} className="hover:bg-slate-50/50">
+                              <td className="py-3 pl-6"><input type="checkbox" className="rounded border-slate-300" /></td>
+                              <td className="py-3 font-bold text-slate-800 flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-700 font-extrabold text-[10px] flex items-center justify-center uppercase shrink-0">
+                                  {u.full_name ? u.full_name.charAt(0) : u.email.charAt(0)}
+                                </div>
+                                <span>{u.full_name || 'N/A'}</span>
+                              </td>
+                              <td className="py-3 capitalize font-semibold">{u.role}</td>
+                              <td className="py-3 font-bold text-slate-700">
+                                {u.building_name && u.unit_number ? `${u.building_name}-${u.unit_number}` : u.unit_number || '—'}
+                              </td>
+                              <td className="py-3 font-medium">{u.email}</td>
+                              <td className="py-3">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                  u.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                  u.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                  'bg-rose-50 text-rose-700 border border-rose-100'
+                                }`}>
+                                  {u.status === 'approved' ? 'ACTIVE' : u.status}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right pr-6 space-x-2">
+                                {u.status !== 'approved' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(u.id, 'approved')}
+                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                    title="Activate/Approve Account"
+                                  >
+                                    Activate
+                                  </button>
+                                )}
+                                {u.status === 'approved' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(u.id, 'suspended')}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                    title="Suspend Account"
+                                  >
+                                    Suspend
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteUser(u.id)}
+                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                  title="Delete User"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
-                )}
+
+                  {/* Pagination footer */}
+                  {usersTotal > 10 && (
+                    <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                      <span>Showing {((usersPage - 1) * 10) + 1}-{Math.min(usersPage * 10, usersTotal)} of {usersTotal} users</span>
+                      <div className="flex gap-1">
+                        <button
+                          disabled={usersPage === 1}
+                          onClick={() => setUsersPage(p => Math.max(1, p - 1))}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer transition disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          disabled={usersPage * 10 >= usersTotal}
+                          onClick={() => setUsersPage(p => p + 1)}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer transition disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
 
-              {/* Tenant Approvals */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-bold text-slate-800">Pending Tenant Clearances</h3>
-                  <span className="text-[9px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded uppercase">Step 2 (Admin)</span>
-                </div>
-                <p className="text-xs text-slate-400 mb-4 font-semibold">Tenants appearing here have already been approved by their respective homeowners.</p>
+              {/* Right Sidebar Column (Pending Registrations Approvals Feed) */}
+              <div className="lg:col-span-1 space-y-6">
                 
-                {pendingTenants.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No pending tenants awaiting admin clearance.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600 min-w-[850px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3 font-semibold">Full Name</th>
-                          <th className="pb-3 font-semibold">Tenant Email</th>
-                          <th className="pb-3 font-semibold">Homeowner Email</th>
-                          <th className="pb-3 font-semibold">Apartment Info</th>
-                          <th className="pb-3 font-semibold">Relationship</th>
-                          <th className="pb-3 font-semibold">NIC / Passport</th>
-                          <th className="pb-3 font-semibold">Phone</th>
-                          <th className="pb-3 font-semibold">Date Registered</th>
-                          <th className="pb-3 text-right font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {pendingTenants.map((tenant) => (
-                          <tr key={tenant.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-bold text-slate-800">{tenant.full_name || 'N/A'}</td>
-                            <td className="py-3">{tenant.email}</td>
-                            <td className="py-3">{tenant.owner_email}</td>
-                            <td className="py-3 font-semibold text-slate-800">
-                              {tenant.building_name} - Unit {tenant.unit_number} {tenant.vehicle_number ? `(${tenant.vehicle_number})` : ''}
-                            </td>
-                            <td className="py-3 capitalize">{tenant.relationship_to_owner || 'N/A'}</td>
-                            <td className="py-3">{tenant.nic_or_passport || 'N/A'}</td>
-                            <td className="py-3">{tenant.phone_number || 'N/A'}</td>
-                            <td className="py-3 text-slate-400">
-                              {new Date(tenant.created_at).toLocaleDateString()}
-                            </td>
-                            <td className="py-3 text-right flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleApproval(tenant.id, 'approve')}
-                                className="p-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 transition cursor-pointer"
-                                title="Approve"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleApproval(tenant.id, 'reject')}
-                                className="p-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 transition cursor-pointer"
-                                title="Reject"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {/* Pending registrations feed */}
+                <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden p-5 space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Pending Registration</h3>
+                    <span className="text-[10px] font-black bg-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center">
+                      {pendingHomeowners.length + pendingTenants.length}
+                    </span>
                   </div>
-                )}
+
+                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                    {pendingHomeowners.map((owner) => (
+                      <div key={owner.id} className="p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 font-black text-xs flex items-center justify-center uppercase shrink-0">
+                            {owner.full_name ? owner.full_name.charAt(0) : 'H'}
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 leading-tight">{owner.full_name || 'N/A'}</h4>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">
+                              {owner.building_name ? `${owner.building_name}-${owner.unit_number}` : 'Homeowner'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproval(owner.id, 'approve')}
+                            className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
+                          >
+                            APPROVE
+                          </button>
+                          <button
+                            onClick={() => handleApproval(owner.id, 'reject')}
+                            className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
+                          >
+                            REJECT
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {pendingTenants.map((tenant) => (
+                      <div key={tenant.id} className="p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-black text-xs flex items-center justify-center uppercase shrink-0">
+                            {tenant.full_name ? tenant.full_name.charAt(0) : 'T'}
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 leading-tight">{tenant.full_name || 'N/A'}</h4>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">
+                              {tenant.building_name ? `${tenant.building_name}-${tenant.unit_number}` : 'Tenant'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproval(tenant.id, 'approve')}
+                            className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
+                          >
+                            APPROVE
+                          </button>
+                          <button
+                            onClick={() => handleApproval(tenant.id, 'reject')}
+                            className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
+                          >
+                            REJECT
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {pendingHomeowners.length === 0 && pendingTenants.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic text-center py-4">No pending user registrations.</p>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={() => { setStatusFilter('pending'); setUsersPage(1); }}
+                    className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center border border-slate-200/60 tracking-wider uppercase"
+                  >
+                    VIEW ALL REQUESTS
+                  </button>
+                </div>
+
               </div>
+
             </div>
           )}
 
@@ -1566,6 +1836,159 @@ export default function AdminDashboard() {
 
         </main>
       </div>
+
+      {/* Add New User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Add New System User</h3>
+              <button 
+                onClick={() => setShowAddUserModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminCreateUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="name@domain.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.email}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter password"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.password}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter full name"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.full_name}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, full_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Phone Number</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter phone number"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.phone_number}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, phone_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">User Role</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newUserForm.role}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value })}
+                    >
+                      <option value="homeowner">Homeowner</option>
+                      <option value="tenant">Tenant</option>
+                      <option value="maintenance">Maintenance Staff</option>
+                      <option value="staff">Staff Admin</option>
+                      <option value="admin">Super Admin</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Initial Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newUserForm.status}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, status: e.target.value })}
+                    >
+                      <option value="approved">Active</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Building Block</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Block A"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.building_name}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, building_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 101"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.unit_number}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, unit_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Vehicle tag</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. KV-8921"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUserForm.vehicle_number}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, vehicle_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
