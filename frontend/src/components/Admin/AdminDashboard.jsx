@@ -88,6 +88,17 @@ export default function AdminDashboard() {
   const [parkingSlots, setParkingSlots] = useState([]);
   const [bills, setBills] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [noticeMetrics, setNoticeMetrics] = useState({ totalNotices: 1248, activeNotices: 42, scheduledNotices: 12, archivedNotices: 1194 });
+  const [noticeDistribution, setNoticeDistribution] = useState({ utility: 45, events: 30, security: 15, other: 10 });
+  const [noticeActivities, setNoticeActivities] = useState([]);
+  const [noticeSearchQuery, setNoticeSearchQuery] = useState('');
+  const [noticeStatusFilter, setNoticeStatusFilter] = useState('All');
+  const [noticeCategoryFilter, setNoticeCategoryFilter] = useState('All');
+  const [noticePriorityFilter, setNoticePriorityFilter] = useState('All');
+  const [showAddNoticeModal, setShowAddNoticeModal] = useState(false);
+  const [newNoticeForm, setNewNoticeForm] = useState({ title: '', content: '', category: 'Utility', expiry_date: '', priority: 'low', audience: 'All Residents', status: 'published' });
+  const [showEditNoticeModal, setShowEditNoticeModal] = useState(false);
+  const [editNoticeForm, setEditNoticeForm] = useState({ id: '', title: '', content: '', category: 'Utility', expiry_date: '', priority: 'low', audience: 'All Residents', status: 'published' });
   const [complaints, setComplaints] = useState([]);
   const [facilityReservations, setFacilityReservations] = useState([]);
   const [facilities, setFacilities] = useState([]);
@@ -207,8 +218,18 @@ export default function AdminDashboard() {
         const regsRes = await api.get('/events/registrations', { params: { search: eventSearchQuery } });
         setEventRegistrations(regsRes.data || []);
       } else if (activeTab === 'notices') {
-        const noticesRes = await api.get('/notices');
-        setNotices(noticesRes.data);
+        const noticesRes = await api.get('/notices', {
+          params: {
+            search: noticeSearchQuery,
+            status: noticeStatusFilter === 'All' ? '' : noticeStatusFilter,
+            category: noticeCategoryFilter === 'All' ? '' : noticeCategoryFilter,
+            priority: noticePriorityFilter === 'All' ? '' : noticePriorityFilter
+          }
+        });
+        setNotices(noticesRes.data.notices || []);
+        setNoticeMetrics(noticesRes.data.metrics || { totalNotices: 1248, activeNotices: 42, scheduledNotices: 12, archivedNotices: 1194 });
+        setNoticeDistribution(noticesRes.data.distribution || { utility: 45, events: 30, security: 15, other: 10 });
+        setNoticeActivities(noticesRes.data.activities || []);
       } else if (activeTab === 'bills') {
         const billsRes = await api.get('/bills');
         setBills(billsRes.data);
@@ -230,7 +251,8 @@ export default function AdminDashboard() {
     residentStatusFilter, residentBlockFilter, residentSearch, residentsPage,
     unitBlockFilter, unitFloorFilter, unitStatusFilter, unitTypeFilter, unitSearchQuery,
     complaintStatusFilter, complaintCategoryFilter, complaintPriorityFilter, complaintBlockFilter, complaintSearchQuery, complaintsPage,
-    eventSearchQuery
+    eventSearchQuery,
+    noticeSearchQuery, noticeStatusFilter, noticeCategoryFilter, noticePriorityFilter
   ]);
 
   // Handle Approvals
@@ -415,13 +437,43 @@ export default function AdminDashboard() {
   const handleCreateNotice = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/notices', newNotice);
-      setSuccessMsg('Notice board broadcast updated!');
-      setNewNotice({ title: '', content: '' });
+      await api.post('/notices', newNoticeForm);
+      setSuccessMsg('Notice board broadcast updated successfully!');
+      setShowAddNoticeModal(false);
+      setNewNoticeForm({ title: '', content: '', category: 'Utility', expiry_date: '', priority: 'low', audience: 'All Residents', status: 'published' });
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Notice publishing failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update Notice
+  const handleUpdateNotice = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/notices/${editNoticeForm.id}`, editNoticeForm);
+      setSuccessMsg('Notice updated successfully!');
+      setShowEditNoticeModal(false);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update notice');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Delete Notice
+  const handleDeleteNotice = async (noticeId) => {
+    if (!window.confirm('Are you sure you want to delete this notice?')) return;
+    try {
+      await api.delete(`/notices/${noticeId}`);
+      setSuccessMsg('Notice deleted successfully.');
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to delete notice');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
@@ -846,6 +898,20 @@ export default function AdminDashboard() {
                 />
               </div>
             </div>
+          ) : activeTab === 'notices' ? (
+            <div className="flex items-center gap-4 flex-1">
+              <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Notices & Announcements</h2>
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search notices, ID or keywords..."
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
+                  value={noticeSearchQuery}
+                  onChange={(e) => setNoticeSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
           ) : (
             /* Search bar */
             <div className="relative max-w-sm w-full">
@@ -952,6 +1018,16 @@ export default function AdminDashboard() {
               >
                 <Plus className="w-4 h-4" />
                 <span>Create New Event</span>
+              </button>
+            )}
+
+            {activeTab === 'notices' && (
+              <button 
+                onClick={() => setShowAddNoticeModal(true)}
+                className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm animate-in fade-in duration-200"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Notice</span>
               </button>
             )}
 
@@ -3310,67 +3386,346 @@ export default function AdminDashboard() {
 
           {/* 3.7 activeTab = NOTICES */}
           {activeTab === 'notices' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               
-              {/* Form notice */}
-              <div className="lg:col-span-1 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm h-fit">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Publish Announcement</h3>
-                <form onSubmit={handleCreateNotice} className="space-y-4">
+              {/* Metrics cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                {/* Total Notices */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Notice Title</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Scheduled Maintenance"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                      value={newNotice.title}
-                      onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })}
-                    />
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Total Notices</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{noticeMetrics.totalNotices}</h3>
                   </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">+12%</span>
+                    <div className="w-10 h-10 rounded-lg bg-slate-50/50 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5 text-slate-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Notices */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Content Details</label>
-                    <textarea
-                      required
-                      rows={4}
-                      placeholder="Describe the notice content..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium font-sans"
-                      value={newNotice.content}
-                      onChange={(e) => setNewNotice({ ...newNotice, content: e.target.value })}
-                    />
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Active</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{noticeMetrics.activeNotices}</h3>
                   </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                  >
-                    Publish Notice
-                  </button>
-                </form>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">Active Now</span>
+                    <div className="w-10 h-10 rounded-lg bg-emerald-50/50 flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5 text-emerald-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scheduled Notices */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Scheduled</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{noticeMetrics.scheduledNotices}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-extrabold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">Upcoming</span>
+                    <div className="w-10 h-10 rounded-lg bg-blue-50/50 flex items-center justify-center shrink-0">
+                      <Clock className="w-5 h-5 text-blue-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Archived Notices */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Archived</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{noticeMetrics.archivedNotices}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[8px] font-extrabold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">Legacy</span>
+                    <div className="w-10 h-10 rounded-lg bg-slate-100/50 flex items-center justify-center shrink-0">
+                      <Plus className="w-5 h-5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Lists notice */}
-              <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4">
-                <h3 className="text-sm font-bold text-slate-800">Notice Board Broadcasts</h3>
-                {notices.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No notices published yet.</p>
-                ) : (
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                    {notices.map((n) => (
-                      <div key={n.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition duration-150 shadow-sm">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-extrabold text-slate-800 text-xs">{n.title}</h4>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            {new Date(n.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed font-medium font-sans">{n.content}</p>
-                        <div className="mt-3 pt-2.5 border-t border-slate-200/60 text-[10px] text-slate-400 font-bold uppercase tracking-wider flex justify-between">
-                          <span>By: {n.author_email}</span>
+              {/* Active Notices Table */}
+              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-sm font-bold text-slate-800">Active Notices</h3>
+                  <div className="flex items-center gap-2">
+                    {/* Priority Filter */}
+                    <div className="relative">
+                      <select 
+                        className="pl-3 pr-8 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer"
+                        value={noticePriorityFilter}
+                        onChange={(e) => setNoticePriorityFilter(e.target.value)}
+                      >
+                        <option value="All">Priority: All</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Category Filter */}
+                    <div className="relative">
+                      <select 
+                        className="pl-3 pr-8 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer"
+                        value={noticeCategoryFilter}
+                        onChange={(e) => setNoticeCategoryFilter(e.target.value)}
+                      >
+                        <option value="All">Category: All</option>
+                        <option value="Utility">Utility</option>
+                        <option value="Event">Event</option>
+                        <option value="Amenity">Amenity</option>
+                        <option value="Security">Security</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="relative">
+                      <select 
+                        className="pl-3 pr-8 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer"
+                        value={noticeStatusFilter}
+                        onChange={(e) => setNoticeStatusFilter(e.target.value)}
+                      >
+                        <option value="All">Status: All</option>
+                        <option value="Published">Published</option>
+                        <option value="Scheduled">Scheduled</option>
+                        <option value="Expired">Expired</option>
+                        <option value="Archived">Archived</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <button 
+                      onClick={() => alert("Simulated Action: Notices data exported to CSV format successfully.")}
+                      className="py-1 px-3 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition flex items-center gap-1 active:scale-95 shadow-xs animate-in duration-200"
+                    >
+                      <span>📥</span>
+                      <span>Export</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table block */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600 font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                        <th className="pb-3 pl-2">Notice ID</th>
+                        <th className="pb-3">Title</th>
+                        <th className="pb-3">Category</th>
+                        <th className="pb-3">Published</th>
+                        <th className="pb-3">Expiry</th>
+                        <th className="pb-3">Priority</th>
+                        <th className="pb-3">Audience</th>
+                        <th className="pb-3">Status</th>
+                        <th className="pb-3 text-right pr-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {notices.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-4 text-center text-slate-400 italic">No notices found matching criteria.</td>
+                        </tr>
+                      ) : (
+                        notices.map((n) => {
+                          let badgeStyle = 'bg-slate-50 text-slate-700 border-slate-100';
+                          if (n.status === 'published') badgeStyle = 'bg-emerald-55/10 text-emerald-700 border-emerald-200/40';
+                          else if (n.status === 'scheduled') badgeStyle = 'bg-blue-50 text-blue-700 border-blue-100';
+                          else if (n.status === 'expired') badgeStyle = 'bg-amber-50 text-amber-700 border-amber-100';
+                          else if (n.status === 'archived') badgeStyle = 'bg-slate-100 text-slate-500 border-slate-200';
+
+                          let dotColor = 'bg-slate-400';
+                          if (n.priority === 'urgent') dotColor = 'bg-red-500';
+                          else if (n.priority === 'high') dotColor = 'bg-amber-500';
+                          else if (n.priority === 'medium') dotColor = 'bg-blue-500';
+                          
+                          return (
+                            <tr key={n.id} className="hover:bg-slate-50/50">
+                              <td className="py-3.5 pl-2 font-bold text-slate-800">#{n.notice_id || `NOT-${n.id}`}</td>
+                              <td className="py-3.5 font-bold text-slate-700 max-w-[200px] truncate" title={n.title}>
+                                {n.title}
+                              </td>
+                              <td className="py-3.5">
+                                <span className="px-2 py-0.5 bg-slate-50 border border-slate-100 text-[9px] font-extrabold uppercase rounded-sm text-slate-500">
+                                  {n.category}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-slate-500 font-semibold">
+                                {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="py-3.5 text-slate-500 font-semibold">
+                                {n.expiry_date ? new Date(n.expiry_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                              </td>
+                              <td className="py-3.5">
+                                <span className="flex items-center gap-1.5 capitalize font-semibold text-slate-600">
+                                  <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+                                  {n.priority}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-slate-500 font-semibold">{n.audience}</td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${badgeStyle}`}>
+                                  {n.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-right pr-2">
+                                <div className="flex items-center justify-end gap-2.5">
+                                  <button 
+                                    onClick={() => alert(`Announcement Details:\n\nID: ${n.notice_id || n.id}\nTitle: ${n.title}\nCategory: ${n.category}\nContent: ${n.content}\nAudience: ${n.audience}\nPriority: ${n.priority}`)}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition"
+                                    title="View Details"
+                                  >
+                                    👁️
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setEditNoticeForm({
+                                        id: n.id,
+                                        title: n.title,
+                                        content: n.content,
+                                        category: n.category,
+                                        expiry_date: n.expiry_date ? n.expiry_date.substring(0, 10) : '',
+                                        priority: n.priority,
+                                        audience: n.audience,
+                                        status: n.status
+                                      });
+                                      setShowEditNoticeModal(true);
+                                    }}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition"
+                                    title="Edit Notice"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteNotice(n.id)}
+                                    className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition animate-in duration-200"
+                                    title="Delete Notice"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination placeholder matching screenshot */}
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100 text-xs font-bold text-slate-400 mt-2">
+                  <span>Showing 1 to {notices.length} of {noticeMetrics.activeNotices} active notices</span>
+                  <div className="flex gap-1.5">
+                    <button className="px-2.5 py-1 bg-slate-50 border border-slate-100 hover:bg-slate-100 rounded text-slate-600">Previous</button>
+                    <button className="px-3 py-1 bg-blue-600 text-white rounded shadow-sm">1</button>
+                    <button className="px-3 py-1 bg-slate-50 border border-slate-100 hover:bg-slate-100 rounded text-slate-600">2</button>
+                    <button className="px-3 py-1 bg-slate-50 border border-slate-100 hover:bg-slate-100 rounded text-slate-600">3</button>
+                    <button className="px-2.5 py-1 bg-slate-50 border border-slate-100 hover:bg-slate-100 rounded text-slate-600">Next</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom two column breakdown */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                {/* Distribution chart card */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-5">Notice Distribution</h3>
+                  <div className="flex flex-col sm:flex-row items-center gap-6 justify-center">
+                    {/* Circle Chart */}
+                    <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
+                      <div className="w-28 h-28 rounded-full border-[10px] border-amber-500 flex items-center justify-center">
+                        <div className="text-center">
+                          <span className="text-base font-black text-slate-800">100%</span>
+                          <span className="text-[7px] font-extrabold text-slate-400 uppercase tracking-wider block leading-none">by Category</span>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                    {/* Legend stats breakdown matching screenshot percentages */}
+                    <div className="space-y-2.5 text-xs font-semibold text-slate-500 w-full">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                          <span>Utility & Maintenance</span>
+                        </div>
+                        <span className="font-extrabold text-slate-800">{noticeDistribution.utility}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                          <span>Events & Social</span>
+                        </div>
+                        <span className="font-extrabold text-slate-800">{noticeDistribution.events}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                          <span>Security Updates</span>
+                        </div>
+                        <span className="font-extrabold text-slate-800">{noticeDistribution.security}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                          <span>Other</span>
+                        </div>
+                        <span className="font-extrabold text-slate-800">{noticeDistribution.other}%</span>
+                      </div>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* Recent Activities Activity Log Card */}
+                <div className="lg:col-span-3 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-5">
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent Notice Activity</h3>
+                      <button 
+                        onClick={() => alert("Recent activity details showing full administrative logs.")}
+                        className="text-xs font-bold text-blue-700 hover:underline"
+                      >
+                        View All
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {noticeActivities.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">No activity recorded.</p>
+                      ) : (
+                        noticeActivities.map((act) => {
+                          return (
+                            <div key={act.id} className="flex gap-3 relative pb-1 border-b border-slate-50 last:border-0 last:pb-0">
+                              <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 bg-slate-50 border-slate-100`}>
+                                <span className="text-xs font-sans">📢</span>
+                              </div>
+                              <div className="flex-1 font-sans">
+                                <div className="flex justify-between items-center">
+                                  <h4 className="text-xs font-bold text-slate-800 leading-none">{act.title}</h4>
+                                  <span className="text-[9px] text-slate-400 font-bold">{act.time}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-semibold mt-1 leading-tight">{act.message}</p>
+                                <div className="flex gap-1.5 mt-1.5">
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-55/10 border border-emerald-200/40 text-[8px] font-extrabold uppercase text-emerald-700">{act.badge}</span>
+                                  {act.badge2 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-50 border border-blue-100 text-[8px] font-extrabold uppercase text-blue-700">{act.badge2}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
+
             </div>
           )}
 
@@ -4671,6 +5026,274 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowEditEventModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Notice Modal */}
+      {showAddNoticeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Create Notice Broadcast</h3>
+              <button 
+                onClick={() => setShowAddNoticeModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNotice} className="space-y-4 font-sans text-xs">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Notice Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Scheduled Water Shutdown"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newNoticeForm.title}
+                  onChange={(e) => setNewNoticeForm({ ...newNoticeForm, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Category</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={newNoticeForm.category}
+                    onChange={(e) => setNewNoticeForm({ ...newNoticeForm, category: e.target.value })}
+                  >
+                    <option value="Utility">Utility & Maintenance</option>
+                    <option value="Event">Events & Social</option>
+                    <option value="Security">Security Updates</option>
+                    <option value="Amenity">Amenity</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Audience</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Tower A, B or All Residents"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newNoticeForm.audience}
+                    onChange={(e) => setNewNoticeForm({ ...newNoticeForm, audience: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                    value={newNoticeForm.expiry_date}
+                    onChange={(e) => setNewNoticeForm({ ...newNoticeForm, expiry_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Priority</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newNoticeForm.priority}
+                      onChange={(e) => setNewNoticeForm({ ...newNoticeForm, priority: e.target.value })}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Publish Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newNoticeForm.status}
+                      onChange={(e) => setNewNoticeForm({ ...newNoticeForm, status: e.target.value })}
+                    >
+                      <option value="published">Published</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="expired">Expired</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description details</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Announce details of notice board..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium font-sans"
+                  value={newNoticeForm.content}
+                  onChange={(e) => setNewNoticeForm({ ...newNoticeForm, content: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddNoticeModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Publish Now
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Notice Modal */}
+      {showEditNoticeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Modify Notice Details</h3>
+              <button 
+                onClick={() => setShowEditNoticeModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateNotice} className="space-y-4 font-sans text-xs">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Notice Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Scheduled Water Shutdown"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={editNoticeForm.title}
+                  onChange={(e) => setEditNoticeForm({ ...editNoticeForm, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Category</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={editNoticeForm.category}
+                    onChange={(e) => setEditNoticeForm({ ...editNoticeForm, category: e.target.value })}
+                  >
+                    <option value="Utility">Utility & Maintenance</option>
+                    <option value="Event">Events & Social</option>
+                    <option value="Security">Security Updates</option>
+                    <option value="Amenity">Amenity</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Audience</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Tower A, B or All Residents"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editNoticeForm.audience}
+                    onChange={(e) => setEditNoticeForm({ ...editNoticeForm, audience: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                    value={editNoticeForm.expiry_date}
+                    onChange={(e) => setEditNoticeForm({ ...editNoticeForm, expiry_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Priority</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editNoticeForm.priority}
+                      onChange={(e) => setEditNoticeForm({ ...editNoticeForm, priority: e.target.value })}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Publish Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editNoticeForm.status}
+                      onChange={(e) => setEditNoticeForm({ ...editNoticeForm, status: e.target.value })}
+                    >
+                      <option value="published">Published</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="expired">Expired</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description details</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Announce details of notice board..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium font-sans"
+                  value={editNoticeForm.content}
+                  onChange={(e) => setEditNoticeForm({ ...editNoticeForm, content: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditNoticeModal(false)}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
                 >
                   Cancel

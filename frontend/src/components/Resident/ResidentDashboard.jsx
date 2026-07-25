@@ -20,6 +20,7 @@ export default function ResidentDashboard() {
   const [myUnit, setMyUnit] = useState(null);
   const [bills, setBills] = useState([]);
   const [complaints, setComplaints] = useState([]);
+  const [notices, setNotices] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [parkingSlots, setParkingSlots] = useState([]); // available guest slots dropdown
   const [myParking, setMyParking] = useState([]); // user's active parking slots
@@ -76,6 +77,9 @@ export default function ResidentDashboard() {
       } else if (activeTab === 'facility') {
         const resRes = await api.get('/facilities/reservations');
         setReservations(resRes.data);
+      } else if (activeTab === 'notices') {
+        const noticesRes = await api.get('/notices');
+        setNotices(noticesRes.data.notices || []);
       } else if (activeTab === 'parking') {
         try {
           const parkRes = await api.get('/parking/my-slots');
@@ -264,6 +268,7 @@ export default function ResidentDashboard() {
               { id: 'facility', label: 'Facilities', icon: Compass },
               { id: 'payments', label: 'Payments', icon: FileText },
               { id: 'parking', label: 'Guest Parking', icon: Compass },
+              { id: 'notices', label: 'Notice Board', icon: Megaphone },
               ...(user?.role === 'homeowner' ? [{ id: 'tenants', label: 'Tenant Approvals', icon: Users }] : [])
             ].map((tab) => {
               const Icon = tab.icon;
@@ -1056,7 +1061,69 @@ export default function ResidentDashboard() {
             </div>
           )}
 
-          {/* 3.6 activeTab = TENANTS (Homeowner clearance step 1) */}
+          {/* 3.6b activeTab = NOTICES (Community Announcements) */}
+          {activeTab === 'notices' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800 mb-1">Community Notices & Announcements</h3>
+                <p className="text-xs text-slate-400 font-semibold mb-5">Stay updated with important announcements from building management.</p>
+
+                {notices.length === 0 ? (
+                  <p className="text-slate-400 text-xs italic">No notices published yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {notices.map((n) => {
+                      let badgeStyle = 'bg-blue-50 text-blue-700 border-blue-100';
+                      let categoryLabel = n.category || 'COMMUNITY';
+                      if (n.priority === 'urgent') badgeStyle = 'bg-red-50 text-red-700 border-red-100';
+                      else if (n.priority === 'high') badgeStyle = 'bg-amber-50 text-amber-700 border-amber-100';
+                      else if (n.category === 'Security') { badgeStyle = 'bg-indigo-50 text-indigo-700 border-indigo-100'; }
+
+                      return (
+                        <div key={n.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition duration-150 shadow-sm">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold border uppercase ${badgeStyle}`}>
+                                  {categoryLabel}
+                                </span>
+                                {n.priority === 'urgent' && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-extrabold border bg-red-100 text-red-700 border-red-200 uppercase">🔴 Urgent</span>
+                                )}
+                                {n.audience && n.audience !== 'All Residents' && (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-extrabold border bg-slate-100 text-slate-500 border-slate-200 uppercase">{n.audience}</span>
+                                )}
+                              </div>
+                              <h4 className="text-xs font-bold text-slate-800">{n.title}</h4>
+                              <p className="text-[10px] text-slate-400 font-medium font-sans leading-normal">{n.content}</p>
+                              <div className="flex items-center gap-3 pt-1">
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  Published: {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                {n.expiry_date && (
+                                  <span className="text-[9px] font-bold text-amber-600">
+                                    Expires: {new Date(n.expiry_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => alert(`Notice Details:\n\nTitle: ${n.title}\nCategory: ${n.category}\nPriority: ${n.priority}\nAudience: ${n.audience}\n\nContent:\n${n.content}\n\nPublished: ${new Date(n.created_at).toLocaleDateString()}`)}
+                              className="shrink-0 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
+                            >
+                              Read More
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3.6c activeTab = TENANTS (Homeowner clearance step 1) */}
           {activeTab === 'tenants' && user?.role === 'homeowner' && (
             <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4">
               <div>
