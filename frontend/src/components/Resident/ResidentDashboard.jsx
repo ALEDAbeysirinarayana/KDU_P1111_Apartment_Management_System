@@ -3,7 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, ClipboardList, Compass, FileText, Plus, Users, 
   Bell, Settings, Check, X, Search, Calendar, User, Clock, CreditCard, 
-  Lock, Megaphone, ShieldAlert, ChevronDown, ChevronRight, Wrench, Edit3, Building, LogOut
+  Lock, Megaphone, ShieldAlert, ChevronDown, ChevronRight, Wrench, Edit3, Building, LogOut,
+  Phone, AlertTriangle, Filter, Upload, CheckCircle, Circle, Loader2
 } from 'lucide-react';
 
 export default function ResidentDashboard() {
@@ -26,8 +27,16 @@ export default function ResidentDashboard() {
   const [myParking, setMyParking] = useState([]); // user's active parking slots
   const [pendingTenants, setPendingTenants] = useState([]); // homeowner only
 
+  // Complaint stats and filters
+  const [complaintStats, setComplaintStats] = useState({ total: 0, pending: 0, in_progress: 0, resolved: 0, this_month: 0 });
+  const [complaintSearch, setComplaintSearch] = useState('');
+  const [complaintStatusFilter, setComplaintStatusFilter] = useState('All');
+  const [complaintPriorityFilter, setComplaintPriorityFilter] = useState('All');
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [showComplaintForm, setShowComplaintForm] = useState(false);
+
   // Input states
-  const [complaintForm, setComplaintForm] = useState({ category: 'Plumbing', description: '', priority: 'medium' });
+  const [complaintForm, setComplaintForm] = useState({ category: 'Plumbing', subject_title: '', description: '', priority: 'medium', is_emergency: false });
   const [bookingForm, setBookingForm] = useState({ facility_name: 'Swimming Pool Annex', date: '' });
   const [parkingForm, setParkingForm] = useState({ slot_number: '', guest_date: '' });
 
@@ -72,8 +81,15 @@ export default function ResidentDashboard() {
         const billsRes = await api.get('/bills');
         setBills(billsRes.data);
       } else if (activeTab === 'complaints') {
-        const compRes = await api.get('/complaints');
+        const [compRes, statsRes] = await Promise.all([
+          api.get('/complaints'),
+          api.get('/complaints/my-stats')
+        ]);
         setComplaints(Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []));
+        setComplaintStats(statsRes.data || { total: 0, pending: 0, in_progress: 0, resolved: 0, this_month: 0 });
+        // Auto-select the most recent complaint for the status tracker
+        const list = Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []);
+        if (list.length > 0 && !selectedComplaint) setSelectedComplaint(list[0]);
       } else if (activeTab === 'facility') {
         const resRes = await api.get('/facilities/reservations');
         setReservations(Array.isArray(resRes.data) ? resRes.data : (resRes.data.reservations || []));
@@ -125,14 +141,24 @@ export default function ResidentDashboard() {
     try {
       await api.post('/complaints', complaintForm);
       setSuccessMsg('Maintenance ticket filed successfully.');
-      setComplaintForm({ category: 'Plumbing', description: '', priority: 'medium' });
-      setActiveTab('dashboard');
+      setComplaintForm({ category: 'Plumbing', subject_title: '', description: '', priority: 'medium', is_emergency: false });
+      setShowComplaintForm(false);
+      // Refresh complaint list and stats
+      const [compRes, statsRes] = await Promise.all([
+        api.get('/complaints'),
+        api.get('/complaints/my-stats')
+      ]);
+      const list = Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []);
+      setComplaints(list);
+      setComplaintStats(statsRes.data || { total: 0, pending: 0, in_progress: 0, resolved: 0, this_month: 0 });
+      if (list.length > 0) setSelectedComplaint(list[0]);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Ticket submission failed');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
+
 
   // Request Facility Booking
   const handleReserve = async (e) => {
@@ -734,115 +760,464 @@ export default function ResidentDashboard() {
             </div>
           )}
 
-          {/* 3.2 activeTab = COMPLAINTS (Filing & history) */}
-          {activeTab === 'complaints' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Form */}
-              <div className="lg:col-span-1 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm h-fit">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">File a Maintenance Ticket</h3>
-                <form onSubmit={handleSubmitComplaint} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Category</label>
-                    <div className="relative">
-                      <select
-                        required
-                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                        value={complaintForm.category}
-                        onChange={(e) => setComplaintForm({ ...complaintForm, category: e.target.value })}
-                      >
-                        <option value="Plumbing">Plumbing</option>
-                        <option value="Electrical">Electrical</option>
-                        <option value="Elevator">Elevator</option>
-                        <option value="Common Area Security">Common Area Security</option>
-                        <option value="Other Operations">Other Operations</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Priority</label>
-                    <div className="relative">
-                      <select
-                        required
-                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                        value={complaintForm.priority}
-                        onChange={(e) => setComplaintForm({ ...complaintForm, priority: e.target.value })}
-                      >
-                        <option value="low">Normal (Low)</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">Emergency (High)</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Details / Description</label>
-                    <textarea
-                      required
-                      rows={4}
-                      placeholder="Specify unit details, location, and the issue..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium font-sans"
-                      value={complaintForm.description}
-                      onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                  >
-                    File Maintenance Ticket
-                  </button>
-                </form>
-              </div>
+          {/* 3.2 activeTab = COMPLAINTS */}
+          {activeTab === 'complaints' && (() => {
+            // Derived filtered list
+            const filteredComplaints = complaints.filter(c => {
+              const matchSearch = complaintSearch === '' ||
+                (c.subject_title || '').toLowerCase().includes(complaintSearch.toLowerCase()) ||
+                c.category.toLowerCase().includes(complaintSearch.toLowerCase()) ||
+                String(c.id).includes(complaintSearch);
+              const matchStatus = complaintStatusFilter === 'All' || c.status === complaintStatusFilter;
+              const matchPriority = complaintPriorityFilter === 'All' || c.priority === complaintPriorityFilter;
+              return matchSearch && matchStatus && matchPriority;
+            });
 
-              {/* Table list */}
-              <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Tickets History</h3>
-                {complaints.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No tickets filed yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Ticket ID</th>
-                          <th className="pb-3">Category</th>
-                          <th className="pb-3">Description</th>
-                          <th className="pb-3">Priority</th>
-                          <th className="pb-3">Status</th>
-                          <th className="pb-3">Assigned Agent</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {complaints.map((c) => (
-                          <tr key={c.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-bold text-slate-800">#CMP-{c.id}</td>
-                            <td className="py-3 font-bold text-slate-700">{c.category}</td>
-                            <td className="py-3 text-slate-500 font-sans max-w-[150px] truncate" title={c.description}>
-                              {c.description}
-                            </td>
-                            <td className="py-3 capitalize font-semibold">{c.priority}</td>
-                            <td className="py-3">
-                              <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase ${
-                                c.status === 'resolved' ? 'bg-emerald-50 text-emerald-700' :
-                                c.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
-                                'bg-amber-50 text-amber-700'
-                              }`}>
-                                {c.status}
-                              </span>
-                            </td>
-                            <td className="py-3 text-slate-400 font-medium italic">
-                              {c.assigned_staff_email || 'Awaiting Assignee'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            const priorityBadge = (p) => {
+              const map = {
+                emergency: 'bg-red-100 text-red-700 border border-red-200',
+                high: 'bg-orange-100 text-orange-700 border border-orange-200',
+                medium: 'bg-blue-100 text-blue-700 border border-blue-200',
+                low: 'bg-slate-100 text-slate-600 border border-slate-200',
+              };
+              return map[p] || map.medium;
+            };
+            const statusBadge = (s) => {
+              const map = {
+                resolved: 'bg-emerald-50 text-emerald-700',
+                in_progress: 'bg-blue-50 text-blue-700',
+                emergency: 'bg-red-50 text-red-700',
+                pending: 'bg-amber-50 text-amber-700',
+              };
+              return map[s] || map.pending;
+            };
+
+            // Status timeline logic
+            const tracker = selectedComplaint;
+            const steps = [
+              { key: 'submitted', label: 'Submitted', desc: tracker ? new Date(tracker.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '' },
+              { key: 'reviewed', label: 'Reviewed', desc: tracker?.assigned_staff_name ? `Reviewed by ${tracker.assigned_staff_name}` : 'Pending review' },
+              { key: 'in_progress', label: 'In Progress', desc: tracker?.assigned_staff_name ? `Assigned to ${tracker.assigned_staff_name}` : 'Pending assignment' },
+              { key: 'resolved', label: 'Resolved', desc: tracker?.status === 'resolved' ? 'Issue resolved' : 'Pending completion' },
+            ];
+            const currentStepIdx = tracker ? (
+              tracker.status === 'resolved' ? 3 :
+              tracker.status === 'in_progress' ? 2 :
+              tracker.assigned_staff_id ? 1 : 0
+            ) : 0;
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* LEFT + MIDDLE: Main Content Col */}
+                <div className="lg:col-span-2 space-y-5">
+
+                  {/* Header */}
+                  <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1">
+                        <h2 className="text-lg font-black text-slate-800 tracking-tight">Complaints &amp; Maintenance</h2>
+                        <p className="text-[11px] text-slate-400 font-medium mt-0.5 leading-relaxed max-w-sm">
+                          Submit maintenance issues and track complaint resolution progress. Our concierge team is dedicated to ensuring your living space remains pristine.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => alert('Emergency Guidelines:\n\n1. For life-threatening emergencies call 911\n2. For building emergencies call Daily Security: +1(555)000-9111\n3. For maintenance call: +1(555)000-9222\n4. Building Manager: +1(555)000-9333')}
+                          className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition flex items-center gap-1.5"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          View Emergency Guidelines
+                        </button>
+                        <button
+                          onClick={() => setShowComplaintForm(true)}
+                          className="px-3 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          New Complaint
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
+
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Total Complaints', value: complaintStats.total, sub: `+${complaintStats.this_month} this month`, subColor: 'text-blue-500' },
+                      { label: 'Pending', value: complaintStats.pending, sub: 'Awaiting action', subColor: 'text-amber-500' },
+                      { label: 'In Progress', value: complaintStats.in_progress, sub: 'Being resolved', subColor: 'text-blue-500' },
+                      { label: 'Resolved', value: complaintStats.resolved, sub: 'Completed', subColor: 'text-emerald-500' },
+                    ].map((s, i) => (
+                      <div key={i} className="bg-white border border-slate-200/60 p-4 rounded-xl shadow-sm">
+                        <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                        <h3 className="text-2xl font-black text-slate-800 mt-1">{String(s.value).padStart(2, '0')}</h3>
+                        <p className={`text-[9px] font-bold mt-1 ${s.subColor}`}>{s.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Filter Toolbar */}
+                  <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm px-4 py-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                    <div className="relative flex-1">
+                      <Filter className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by complaint ID, category, or status..."
+                        className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-200/80 rounded-lg text-xs outline-none focus:border-blue-500 focus:bg-white transition"
+                        value={complaintSearch}
+                        onChange={e => setComplaintSearch(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <select
+                          className="pl-3 pr-8 py-2 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                          value={complaintStatusFilter}
+                          onChange={e => setComplaintStatusFilter(e.target.value)}
+                        >
+                          <option value="All">All Status</option>
+                          <option value="pending">Pending</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="resolved">Resolved</option>
+                          <option value="emergency">Emergency</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                      </div>
+                      <div className="relative">
+                        <select
+                          className="pl-3 pr-8 py-2 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                          value={complaintPriorityFilter}
+                          onChange={e => setComplaintPriorityFilter(e.target.value)}
+                        >
+                          <option value="All">Priority</option>
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                          <option value="emergency">Emergency</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ticket Table */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                    {filteredComplaints.length === 0 ? (
+                      <div className="p-10 text-center">
+                        <ClipboardList className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                        <p className="text-slate-400 text-xs font-semibold">No tickets match your filters.</p>
+                        <p className="text-slate-300 text-[10px] mt-1">Try adjusting your search or filters above.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-600">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                              <th className="px-4 py-3">ID</th>
+                              <th className="px-4 py-3">Category</th>
+                              <th className="px-4 py-3">Priority</th>
+                              <th className="px-4 py-3">Submitted</th>
+                              <th className="px-4 py-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {filteredComplaints.map((c) => (
+                              <tr
+                                key={c.id}
+                                onClick={() => setSelectedComplaint(c)}
+                                className={`hover:bg-blue-50/40 cursor-pointer transition-colors ${
+                                  selectedComplaint?.id === c.id ? 'bg-blue-50/60 border-l-2 border-l-blue-500' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <span className="font-bold text-blue-700 text-[10px]">SCRF-{String(c.id).padStart(4, '0')}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div>
+                                    <p className="font-bold text-slate-800 text-[11px]">{c.category}</p>
+                                    {c.subject_title && <p className="text-[10px] text-slate-400 truncate max-w-[140px]">{c.subject_title}</p>}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${priorityBadge(c.priority)}`}>
+                                    {c.priority === 'emergency' ? '🚨 Emergency' : c.priority.charAt(0).toUpperCase() + c.priority.slice(1)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-slate-400 font-medium">
+                                  {new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${statusBadge(c.status)}`}>
+                                    {c.status === 'in_progress' ? 'In Progress' : c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit a New Complaint Form */}
+                  {showComplaintForm && (
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-6" id="complaint-form">
+                      <div className="flex items-center justify-between mb-5">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-800">Submit a New Complaint</h3>
+                          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Provide as much detail as possible to help us resolve the issue quickly.</p>
+                        </div>
+                        <button
+                          onClick={() => setShowComplaintForm(false)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSubmitComplaint} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Category</label>
+                            <div className="relative">
+                              <select
+                                required
+                                className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                                value={complaintForm.category}
+                                onChange={(e) => setComplaintForm({ ...complaintForm, category: e.target.value })}
+                              >
+                                <option value="">Select a category</option>
+                                <option value="Plumbing">Plumbing</option>
+                                <option value="Electrical">Electrical</option>
+                                <option value="HVAC">HVAC</option>
+                                <option value="Elevator">Elevator</option>
+                                <option value="Common Area Security">Common Area Security</option>
+                                <option value="Pest Control">Pest Control</option>
+                                <option value="Other Operations">Other Operations</option>
+                              </select>
+                              <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Priority Level</label>
+                            <div className="relative">
+                              <select
+                                className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                                value={complaintForm.priority}
+                                disabled={complaintForm.is_emergency}
+                                onChange={(e) => setComplaintForm({ ...complaintForm, priority: e.target.value })}
+                              >
+                                <option value="low">Low — Non-urgent</option>
+                                <option value="medium">Medium — Moderate</option>
+                                <option value="high">High — Urgent</option>
+                              </select>
+                              <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Subject Title</label>
+                          <input
+                            type="text"
+                            placeholder="E.g. Leaking pipe in master bathroom"
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-300 rounded-lg text-xs font-medium transition-all"
+                            value={complaintForm.subject_title}
+                            onChange={(e) => setComplaintForm({ ...complaintForm, subject_title: e.target.value })}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Description</label>
+                          <textarea
+                            required
+                            rows={4}
+                            placeholder="Detailed description of the problem..."
+                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-300 rounded-lg transition-all text-xs font-medium font-sans resize-none"
+                            value={complaintForm.description}
+                            onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
+                          />
+                        </div>
+
+                        {/* File Upload Zone */}
+                        <div
+                          className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                          onClick={() => document.getElementById('complaint-file-input').click()}
+                        >
+                          <input id="complaint-file-input" type="file" accept="image/*,.pdf" className="hidden" />
+                          <Upload className="w-7 h-7 text-slate-300 group-hover:text-blue-400 mx-auto mb-2 transition-colors" />
+                          <p className="text-xs font-semibold text-slate-400 group-hover:text-blue-500 transition-colors">Click to upload or drag and drop</p>
+                          <p className="text-[10px] text-slate-300 mt-0.5">PNG, JPG or PDF up to 5MB</p>
+                        </div>
+
+                        {/* Emergency Checkbox */}
+                        <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                          complaintForm.is_emergency
+                            ? 'bg-red-50 border-red-200'
+                            : 'bg-slate-50 border-slate-200 hover:border-red-200 hover:bg-red-50/30'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 accent-red-600 cursor-pointer"
+                            checked={complaintForm.is_emergency}
+                            onChange={(e) => setComplaintForm({ ...complaintForm, is_emergency: e.target.checked })}
+                          />
+                          <span className={`text-[10px] font-bold uppercase tracking-wide ${
+                            complaintForm.is_emergency ? 'text-red-700' : 'text-slate-500'
+                          }`}>
+                            🚨 This is an emergency request requiring immediate dispatch
+                          </span>
+                        </label>
+
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setComplaintForm({ category: 'Plumbing', subject_title: '', description: '', priority: 'medium', is_emergency: false });
+                            }}
+                            className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition"
+                          >
+                            Clear Form
+                          </button>
+                          <button
+                            type="submit"
+                            className="flex-1 py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                          >
+                            Submit Request
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {!showComplaintForm && (
+                    <button
+                      onClick={() => setShowComplaintForm(true)}
+                      className="w-full py-3 border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 text-slate-400 hover:text-blue-600 text-xs font-bold rounded-xl cursor-pointer transition flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Submit a New Complaint
+                    </button>
+                  )}
+
+                </div>
+
+                {/* RIGHT PANEL */}
+                <div className="space-y-4">
+
+                  {/* Current Ticket Status Tracker */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-4">Current Ticket Status</h3>
+                    {tracker ? (
+                      <div className="space-y-0">
+                        {steps.map((step, i) => {
+                          const isDone = i <= currentStepIdx;
+                          const isActive = i === currentStepIdx;
+                          return (
+                            <div key={step.key} className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                                  isDone
+                                    ? isActive
+                                      ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200'
+                                      : 'bg-emerald-500 border-emerald-500'
+                                    : 'bg-white border-slate-200'
+                                }`}>
+                                  {isDone && !isActive ? (
+                                    <Check className="w-3.5 h-3.5 text-white" />
+                                  ) : isActive ? (
+                                    <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                  ) : (
+                                    <Circle className="w-3 h-3 text-slate-200" />
+                                  )}
+                                </div>
+                                {i < steps.length - 1 && (
+                                  <div className={`w-0.5 h-8 mt-0.5 ${
+                                    i < currentStepIdx ? 'bg-emerald-400' : 'bg-slate-100'
+                                  }`} />
+                                )}
+                              </div>
+                              <div className="pb-6">
+                                <p className={`text-xs font-bold ${
+                                  isActive ? 'text-blue-700' : isDone ? 'text-slate-700' : 'text-slate-300'
+                                }`}>{step.label}</p>
+                                <p className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5">{step.desc}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No ticket selected. Click a row to track.</p>
+                    )}
+                    {tracker && (
+                      <div className="mt-2 pt-3 border-t border-slate-100">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Selected Ticket</p>
+                        <p className="text-xs font-bold text-blue-700 mt-0.5">SCRF-{String(tracker.id).padStart(4, '0')} — {tracker.category}</p>
+                        {tracker.subject_title && <p className="text-[10px] text-slate-500 mt-0.5">{tracker.subject_title}</p>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Emergency Contacts */}
+                  <div className="rounded-2xl overflow-hidden shadow-sm" style={{background: 'linear-gradient(135deg, #1e3a5f 0%, #133fbd 100%)'}}>
+                    <div className="p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                          <Phone className="w-3 h-3 text-white" />
+                        </div>
+                        <h3 className="text-xs font-black text-white uppercase tracking-wider">Emergency Contacts</h3>
+                      </div>
+                      <div className="space-y-3">
+                        {[
+                          { label: 'Daily Security', number: '+1(555)000-9111', icon: '🛡️' },
+                          { label: 'Maintenance Desk', number: '+1(555)000-9222', icon: '🔧' },
+                          { label: 'Building Manager', number: '+1(555)000-9333', icon: '🏢' },
+                        ].map((contact, i) => (
+                          <div key={i} className="flex items-center justify-between bg-white/10 rounded-xl p-3 hover:bg-white/20 transition-colors">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-base">{contact.icon}</span>
+                              <div>
+                                <p className="text-[9px] font-bold text-white/60 uppercase tracking-wider">{contact.label}</p>
+                                <p className="text-xs font-black text-white">{contact.number}</p>
+                              </div>
+                            </div>
+                            <a
+                              href={`tel:${contact.number.replace(/[^0-9+]/g, '')}`}
+                              className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                            >
+                              <Phone className="w-3 h-3 text-white" />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Maintenance Banner */}
+                  <div className="rounded-2xl overflow-hidden shadow-sm" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'}}>
+                    <div className="p-5">
+                      <div className="flex items-center justify-center mb-3">
+                        <div className="w-14 h-14 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                          <Wrench className="w-7 h-7 text-blue-400" />
+                        </div>
+                      </div>
+                      <p className="text-center text-[10px] font-semibold text-white/70 leading-relaxed">
+                        Our 24/7 maintenance team is always on standby for your comfort!
+                      </p>
+                      <button
+                        onClick={() => setShowComplaintForm(true)}
+                        className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg cursor-pointer transition"
+                      >
+                        Report an Issue
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 3.3 activeTab = FACILITY (Filing & history) */}
           {activeTab === 'facility' && (

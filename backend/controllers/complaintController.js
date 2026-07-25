@@ -4,21 +4,24 @@ const pool = require('../config/db');
 // @route   POST /api/complaints
 // @access  Private (Homeowner / Tenant)
 const submitComplaint = async (req, res) => {
-  const { category, description, priority } = req.body;
+  const { category, subject_title, description, priority, is_emergency } = req.body;
   const userId = req.user.id;
 
   try {
-    if (!category || !description || !priority) {
-      return res.status(400).json({ message: 'All fields are required.' });
+    if (!category || !description) {
+      return res.status(400).json({ message: 'Category and description are required.' });
     }
 
-    if (!['low', 'medium', 'high'].includes(priority)) {
+    // If emergency checkbox is checked, override priority
+    const effectivePriority = is_emergency ? 'emergency' : (priority || 'medium');
+
+    if (!['low', 'medium', 'high', 'emergency'].includes(effectivePriority)) {
       return res.status(400).json({ message: 'Invalid priority level.' });
     }
 
     const [result] = await pool.query(
-      'INSERT INTO complaints (user_id, category, description, priority, status) VALUES (?, ?, ?, ?, ?)',
-      [userId, category, description, priority, 'pending']
+      'INSERT INTO complaints (user_id, category, subject_title, description, priority, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, category, subject_title || null, description, effectivePriority, effectivePriority === 'emergency' ? 'emergency' : 'pending']
     );
 
     return res.status(201).json({
@@ -31,6 +34,44 @@ const submitComplaint = async (req, res) => {
   }
 };
 
+// @desc    Get per-user complaint stats (for stat cards)
+// @route   GET /api/complaints/my-stats
+// @access  Private (Homeowner / Tenant)
+const getMyComplaintStats = async (req, res) => {
+  const { id: userId, role } = req.user;
+
+  try {
+    // For admin/staff see all; for residents see only their own
+    const userFilter = (role === 'admin' || role === 'staff' || role === 'maintenance')
+      ? ''
+      : `WHERE user_id = ${pool.escape(userId)}`;
+
+    const [[stats]] = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress,
+        SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) AS resolved,
+        SUM(CASE WHEN status = 'emergency' OR priority = 'emergency' THEN 1 ELSE 0 END) AS emergency,
+        SUM(CASE WHEN MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) AS this_month
+      FROM complaints
+      ${userFilter}
+    `);
+
+    return res.status(200).json({
+      total: stats.total || 0,
+      pending: stats.pending || 0,
+      in_progress: stats.in_progress || 0,
+      resolved: stats.resolved || 0,
+      emergency: stats.emergency || 0,
+      this_month: stats.this_month || 0
+    });
+  } catch (error) {
+    console.error('Get my complaint stats error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 // @desc    Get complaints based on user role and filters
 // @route   GET /api/complaints
 // @access  Private (All Roles)
@@ -38,23 +79,20 @@ const getComplaints = async (req, res) => {
   const { id: userId, role } = req.user;
 
   try {
-    const { status, category, priority, block, search, page = 1, limit = 10 } = req.query;
+    const { status, category, priority, block, search, page = 1, limit = 50 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     let conditions = [];
     let params = [];
 
     if (role === 'maintenance') {
-      // Limit to tickets assigned to them or unassigned
       conditions.push('(c.assigned_staff_id = ? OR c.assigned_staff_id IS NULL)');
       params.push(userId);
     } else if (role !== 'admin' && role !== 'staff') {
-      // Homeowners/Tenants only see their own tickets
       conditions.push('c.user_id = ?');
       params.push(userId);
     }
 
-    // Apply Filter Criteria
     if (status && status !== 'All' && status !== 'Status: All') {
       conditions.push('c.status = ?');
       params.push(status.toLowerCase());
@@ -76,14 +114,13 @@ const getComplaints = async (req, res) => {
     }
 
     if (search && search.trim() !== '') {
-      conditions.push('(c.description LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR u.unit_number LIKE ?)');
+      conditions.push('(c.description LIKE ? OR c.subject_title LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR u.unit_number LIKE ?)');
       const searchPattern = `%${search.trim()}%`;
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Calculate total matching records
     const countQuery = `
       SELECT COUNT(*) AS count 
       FROM complaints c
@@ -93,7 +130,6 @@ const getComplaints = async (req, res) => {
     const [countRes] = await pool.query(countQuery, params);
     const totalMatch = countRes[0]?.count || 0;
 
-    // Fetch complaints
     const selectQuery = `
       SELECT 
         c.*, 
@@ -119,7 +155,6 @@ const getComplaints = async (req, res) => {
     `;
     const [complaints] = await pool.query(selectQuery, [...params, parseInt(limit), parseInt(offset)]);
 
-    // Calculate Metrics for summary cards
     const [[complaintMetrics]] = await pool.query(`
       SELECT 
         COUNT(*) AS total,
@@ -129,7 +164,6 @@ const getComplaints = async (req, res) => {
       FROM complaints
     `);
 
-    // Calculate staff workloads
     const [staffWorkload] = await pool.query(`
       SELECT 
         u.id, 
@@ -144,7 +178,6 @@ const getComplaints = async (req, res) => {
       ORDER BY active_tickets DESC
     `);
 
-    // Calculate dynamic distribution breakdown
     const [[distribution]] = await pool.query(`
       SELECT
         COUNT(*) AS total_active,
@@ -191,7 +224,6 @@ const updateComplaintStatus = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or missing status.' });
     }
 
-    // Verify complaint exists
     const [existing] = await pool.query('SELECT * FROM complaints WHERE id = ?', [id]);
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Complaint not found.' });
@@ -217,13 +249,11 @@ const assignComplaint = async (req, res) => {
       return res.status(400).json({ message: 'Staff ID is required.' });
     }
 
-    // Verify complaint exists
     const [existing] = await pool.query('SELECT * FROM complaints WHERE id = ?', [id]);
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Complaint not found.' });
     }
 
-    // Verify assigned user is staff or maintenance
     const [staff] = await pool.query('SELECT role FROM users WHERE id = ?', [assigned_staff_id]);
     if (staff.length === 0 || !['staff', 'maintenance'].includes(staff[0].role)) {
       return res.status(400).json({ message: 'Assigned user must be a valid staff or maintenance worker.' });
@@ -239,6 +269,7 @@ const assignComplaint = async (req, res) => {
 
 module.exports = {
   submitComplaint,
+  getMyComplaintStats,
   getComplaints,
   updateComplaintStatus,
   assignComplaint
