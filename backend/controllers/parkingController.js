@@ -20,9 +20,17 @@ async function getResidentUnitId(userId, role) {
 const getParkingSlots = async (req, res) => {
   try {
     const [slots] = await pool.query(`
-      SELECT p.*, u.block_name, u.floor_number, u.unit_number
+      SELECT 
+        p.*, 
+        u.block_name, 
+        u.floor_number, 
+        u.unit_number,
+        COALESCE(tenant.full_name, owner.full_name) AS resident_name,
+        COALESCE(tenant.vehicle_number, owner.vehicle_number) AS vehicle_number
       FROM parking_management p
       LEFT JOIN units u ON p.unit_id = u.id
+      LEFT JOIN users tenant ON u.tenant_id = tenant.id
+      LEFT JOIN users owner ON u.owner_id = owner.id
       ORDER BY p.type, p.slot_number
     `);
     return res.status(200).json(slots);

@@ -49,9 +49,14 @@ const getReservations = async (req, res) => {
     let params = [];
 
     if (role === 'admin' || role === 'staff') {
-      // Admin/Staff see all reservations
+      // Admin/Staff see all reservations with joined resident details
       query = `
-        SELECT r.*, u.email AS resident_email 
+        SELECT 
+          r.*, 
+          u.email AS resident_email,
+          u.full_name AS resident_name,
+          u.building_name AS resident_building,
+          u.unit_number AS resident_unit
         FROM facility_reservations r
         JOIN users u ON r.user_id = u.id
         ORDER BY r.date DESC
@@ -59,15 +64,32 @@ const getReservations = async (req, res) => {
     } else {
       // Residents see only their own reservations
       query = `
-        SELECT * FROM facility_reservations 
-        WHERE user_id = ? 
-        ORDER BY date DESC
+        SELECT r.*, u.full_name AS resident_name
+        FROM facility_reservations r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.user_id = ? 
+        ORDER BY r.date DESC
       `;
       params = [userId];
     }
 
     const [reservations] = await pool.query(query, params);
-    return res.status(200).json(reservations);
+
+    // Calculate dynamic stats metrics
+    const [[facCount]] = await pool.query('SELECT COUNT(*) AS count FROM facilities');
+    const [[activeCount]] = await pool.query('SELECT COUNT(*) AS count FROM facility_reservations WHERE status = "approved"');
+    const [[pendingCount]] = await pool.query('SELECT COUNT(*) AS count FROM facility_reservations WHERE status = "pending"');
+    const [[parkingCount]] = await pool.query('SELECT COUNT(*) AS count FROM parking_management');
+
+    return res.status(200).json({
+      reservations,
+      metrics: {
+        totalFacilities: facCount.count || 0,
+        activeBookings: activeCount.count || 0,
+        pendingRequests: pendingCount.count || 0,
+        totalParkingSlots: parkingCount.count || 0
+      }
+    });
   } catch (error) {
     console.error('Get reservations error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
@@ -125,8 +147,77 @@ const approveReservation = async (req, res) => {
   }
 };
 
+// @desc    Get all facilities
+// @route   GET /api/facilities
+// @access  Private (All Roles)
+const getFacilities = async (req, res) => {
+  try {
+    const [facilities] = await pool.query('SELECT * FROM facilities ORDER BY facility_id');
+    return res.status(200).json(facilities);
+  } catch (error) {
+    console.error('Get facilities error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Create new facility
+// @route   POST /api/facilities
+// @access  Private (Admin Only)
+const createFacility = async (req, res) => {
+  const { facility_id, name, description, capacity, status } = req.body;
+  try {
+    if (!facility_id || !name || !capacity) {
+      return res.status(400).json({ message: 'Facility ID, name, and capacity are required.' });
+    }
+    await pool.query(
+      'INSERT INTO facilities (facility_id, name, description, capacity, status) VALUES (?, ?, ?, ?, ?)',
+      [facility_id, name, description, parseInt(capacity), status || 'available']
+    );
+    return res.status(201).json({ message: 'Facility created successfully.' });
+  } catch (error) {
+    console.error('Create facility error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Update facility details
+// @route   PUT /api/facilities/:id
+// @access  Private (Admin Only)
+const updateFacility = async (req, res) => {
+  const { id } = req.params;
+  const { facility_id, name, description, capacity, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE facilities SET facility_id = ?, name = ?, description = ?, capacity = ?, status = ? WHERE id = ?',
+      [facility_id, name, description, parseInt(capacity), status, id]
+    );
+    return res.status(200).json({ message: 'Facility updated successfully.' });
+  } catch (error) {
+    console.error('Update facility error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Delete a facility
+// @route   DELETE /api/facilities/:id
+// @access  Private (Admin Only)
+const deleteFacility = async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM facilities WHERE id = ?', [id]);
+    return res.status(200).json({ message: 'Facility deleted successfully.' });
+  } catch (error) {
+    console.error('Delete facility error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 module.exports = {
   reserveFacility,
   getReservations,
-  approveReservation
+  approveReservation,
+  getFacilities,
+  createFacility,
+  updateFacility,
+  deleteFacility
 };

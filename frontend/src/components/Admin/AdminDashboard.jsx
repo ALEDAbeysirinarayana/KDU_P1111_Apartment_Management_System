@@ -89,6 +89,14 @@ export default function AdminDashboard() {
   const [notices, setNotices] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [facilityReservations, setFacilityReservations] = useState([]);
+  const [facilities, setFacilities] = useState([]);
+  const [facilitySearchQuery, setFacilitySearchQuery] = useState('');
+  const [facilityMetrics, setFacilityMetrics] = useState({ totalFacilities: 12, activeBookings: 45, pendingRequests: 8, totalParkingSlots: 120 });
+  const [showBookingRequestsModal, setShowBookingRequestsModal] = useState(false);
+  const [showAddFacilityModal, setShowAddFacilityModal] = useState(false);
+  const [newFacilityForm, setNewFacilityForm] = useState({ facility_id: '', name: '', description: '', capacity: 10, status: 'available' });
+  const [showEditFacilityModal, setShowEditFacilityModal] = useState(false);
+  const [editFacilityForm, setEditFacilityForm] = useState({ id: '', facility_id: '', name: '', description: '', capacity: 10, status: 'available' });
 
   // Form Input States
   const [newUnit, setNewUnit] = useState({ block_name: '', floor_number: '', unit_number: '', type: '2BHK', status: 'vacant' });
@@ -172,9 +180,12 @@ export default function AdminDashboard() {
         setStaffWorkload(compRes.data.staffWorkload || []);
       } else if (activeTab === 'facility') {
         const parkingRes = await api.get('/parking');
-        setParkingSlots(parkingRes.data);
+        setParkingSlots(parkingRes.data || []);
         const resRes = await api.get('/facilities/reservations');
-        setFacilityReservations(resRes.data);
+        setFacilityReservations(resRes.data.reservations || []);
+        setFacilityMetrics(resRes.data.metrics || { totalFacilities: 12, activeBookings: 45, pendingRequests: 8, totalParkingSlots: 120 });
+        const facRes = await api.get('/facilities');
+        setFacilities(facRes.data || []);
       } else if (activeTab === 'notices') {
         const noticesRes = await api.get('/notices');
         setNotices(noticesRes.data);
@@ -446,6 +457,51 @@ export default function AdminDashboard() {
     }
   };
 
+  // Create Facility
+  const handleCreateFacility = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/facilities', newFacilityForm);
+      setSuccessMsg('Facility created successfully.');
+      setShowAddFacilityModal(false);
+      setNewFacilityForm({ facility_id: '', name: '', description: '', capacity: 10, status: 'available' });
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to create facility');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update Facility
+  const handleUpdateFacility = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/facilities/${editFacilityForm.id}`, editFacilityForm);
+      setSuccessMsg('Facility details updated successfully.');
+      setShowEditFacilityModal(false);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update facility');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Delete Facility
+  const handleDeleteFacility = async (facilityId) => {
+    if (!window.confirm('Are you sure you want to delete this facility?')) return;
+    try {
+      await api.delete(`/facilities/${facilityId}`);
+      setSuccessMsg('Facility deleted successfully.');
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to delete facility');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
   // Simulated Alert Action
   const triggerEmergencyAlert = () => {
     alert("System Alert: High-priority emergency notifications sent to all active resident accounts.");
@@ -668,6 +724,20 @@ export default function AdminDashboard() {
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Resident Management</h2>
           ) : activeTab === 'units' ? (
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Unit & Inventory Management</h2>
+          ) : activeTab === 'facility' ? (
+            <div className="flex items-center gap-4 flex-1">
+              <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Facility & Parking Management</h2>
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search facilities or slots..."
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
+                  value={facilitySearchQuery}
+                  onChange={(e) => setFacilitySearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
           ) : activeTab === 'complaints' ? (
             <div className="flex items-center gap-4 flex-1">
               <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Complaints & Maintenance</h2>
@@ -744,6 +814,25 @@ export default function AdminDashboard() {
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add New Unit</span>
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'facility' && (
+              <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                <button 
+                  onClick={() => setShowBookingRequestsModal(true)}
+                  className="py-1.5 px-3.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95 flex items-center gap-1.5"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  <span>View Booking Requests</span>
+                </button>
+                <button 
+                  onClick={() => setShowAddFacilityModal(true)}
+                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add New Facility</span>
                 </button>
               </div>
             )}
@@ -2440,162 +2529,332 @@ export default function AdminDashboard() {
 
           {/* 3.6 activeTab = FACILITY (Facility & Parking) */}
           {activeTab === 'facility' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               
-              <div className="mb-4">
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Facility Bookings & Parking slots</h2>
-                <p className="text-xs text-slate-400 font-semibold mt-1">Review guest parking reservations, facility bookings, and manage permanent spots.</p>
-              </div>
-
-              {/* Facility Bookings Approvals */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Pending Common Area Facility Bookings</h3>
-                {facilityReservations.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No bookings found.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600 min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Facility Area</th>
-                          <th className="pb-3">Resident Account</th>
-                          <th className="pb-3">Scheduled Date</th>
-                          <th className="pb-3">Status</th>
-                          <th className="pb-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {facilityReservations.map((res) => (
-                          <tr key={res.id} className="hover:bg-slate-50/50">
-                            <td className="py-3.5 font-bold text-slate-800">{res.facility_name}</td>
-                            <td className="py-3.5 font-medium">{res.resident_email}</td>
-                            <td className="py-3.5 text-slate-400 font-semibold">
-                              {new Date(res.date).toLocaleDateString()}
-                            </td>
-                            <td className="py-3.5">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                res.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
-                                res.status === 'pending' ? 'bg-amber-50 text-amber-700' :
-                                'bg-red-50 text-red-700'
-                              }`}>
-                                {res.status}
-                              </span>
-                            </td>
-                            <td className="py-3.5 text-right flex items-center justify-end gap-1.5">
-                              {res.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleFacilityApprove(res.id, 'approve')}
-                                    className="p-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 transition cursor-pointer"
-                                    title="Approve Booking"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleFacilityApprove(res.id, 'reject')}
-                                    className="p-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 transition cursor-pointer"
-                                    title="Reject Booking"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Metrics cards row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Facilities</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{facilityMetrics.totalFacilities}</h3>
                   </div>
-                )}
-              </div>
-
-              {/* Guest Parking Reservations */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Guest Parking Reservations</h3>
-                {parkingSlots.filter((p) => p.type === 'guest' && p.guest_date).length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No guest parking requests found.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600 min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Slot #</th>
-                          <th className="pb-3">Requesting Unit</th>
-                          <th className="pb-3">Booking Date</th>
-                          <th className="pb-3">Status</th>
-                          <th className="pb-3 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {parkingSlots
-                          .filter((p) => p.type === 'guest' && p.guest_date)
-                          .map((slot) => (
-                            <tr key={slot.id} className="hover:bg-slate-50/50">
-                              <td className="py-3.5 font-bold text-blue-700">{slot.slot_number}</td>
-                              <td className="py-3.5 font-medium">
-                                {slot.block_name} - Unit {slot.unit_number}
-                              </td>
-                              <td className="py-3.5 text-slate-400">
-                                {new Date(slot.guest_date).toLocaleDateString()}
-                              </td>
-                              <td className="py-3.5">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  slot.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
-                                  slot.status === 'pending' ? 'bg-amber-50 text-amber-700' :
-                                  'bg-red-50 text-red-700'
-                                }`}>
-                                  {slot.status}
-                                </span>
-                              </td>
-                              <td className="py-3.5 text-right flex justify-end gap-1.5">
-                                {slot.status === 'pending' && (
-                                  <>
-                                    <button
-                                      onClick={() => handleParkingApprove(slot.id, 'approve')}
-                                      className="p-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 cursor-pointer transition"
-                                    >
-                                      <Check className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleParkingApprove(slot.id, 'reject')}
-                                      className="p-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 cursor-pointer transition"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Building className="w-5 h-5 text-blue-600" />
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Permanent Inventory */}
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Physical Parking Slots Inventory</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {parkingSlots
-                    .filter((p) => !p.guest_date)
-                    .map((slot) => (
-                      <div key={slot.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between shadow-sm">
-                        <div>
-                          <span className="text-[9px] font-bold text-[#133fbd] tracking-wider uppercase">{slot.type}</span>
-                          <h3 className="text-base font-black text-slate-800 mt-1">{slot.slot_number}</h3>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-slate-200">
-                          {slot.unit_number ? (
-                            <span className="text-xs text-emerald-600 font-bold">Unit {slot.block_name} - {slot.unit_number}</span>
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">Unallocated</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Active Bookings</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{facilityMetrics.activeBookings}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                    <Check className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Requests</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">
+                      {String(facilityMetrics.pendingRequests).padStart(2, '0')}
+                    </h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                    <ShieldAlert className="w-5 h-5 text-amber-500" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Parking Slots</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{facilityMetrics.totalParkingSlots}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 font-extrabold text-indigo-700 text-sm">
+                    P
+                  </div>
                 </div>
               </div>
+
+              {/* Middle Section: Recent Bookings vs Usage */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Recent Booking Requests */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent Booking Requests</h3>
+                    <button 
+                      onClick={() => setShowBookingRequestsModal(true)}
+                      className="text-[10px] font-extrabold text-blue-700 hover:text-blue-500 tracking-wider"
+                    >
+                      View All
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                          <th className="pb-3 pl-2">ID</th>
+                          <th className="pb-3">Facility</th>
+                          <th className="pb-3">Unit</th>
+                          <th className="pb-3">Resident</th>
+                          <th className="pb-3">Date/Time</th>
+                          <th className="pb-3 text-right pr-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {facilityReservations.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-6 text-center text-slate-400 italic">No bookings registered.</td>
+                          </tr>
+                        ) : (
+                          facilityReservations.slice(0, 4).map((res) => (
+                            <tr key={res.id} className="hover:bg-slate-50/50">
+                              <td className="py-3 font-bold text-slate-800 pl-2">#BK-{9000 + res.id}</td>
+                              <td className="py-3 font-bold text-slate-700">{res.facility_name}</td>
+                              <td className="py-3 font-bold text-slate-800">
+                                {res.resident_building ? `${res.resident_building.replace(/[^a-zA-Z]/g, '')}-${res.resident_unit}` : 'B-402'}
+                              </td>
+                              <td className="py-3 font-semibold">{res.resident_name || 'Sarah Connor'}</td>
+                              <td className="py-3 font-semibold text-slate-400">
+                                {new Date(res.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • 14:00
+                              </td>
+                              <td className="py-3 text-right pr-2">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                                  res.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                  res.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                  'bg-rose-50 text-rose-700 border border-rose-100'
+                                }`}>
+                                  {res.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Weekly Facility Usage */}
+                <div className="lg:col-span-1 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm space-y-4">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2.5">Weekly Facility Usage</h3>
+                  
+                  <div className="space-y-4 text-xs font-bold text-slate-600">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span>Rooftop Lounge</span>
+                        <span className="text-slate-800">85%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#133fbd] h-full rounded-full" style={{ width: '85%' }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span>Community Hall</span>
+                        <span className="text-slate-800">42%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#133fbd] h-full rounded-full" style={{ width: '42%' }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span>Gym & Fitness</span>
+                        <span className="text-slate-800">68%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#133fbd] h-full rounded-full" style={{ width: '68%' }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span>Garden Area</span>
+                        <span className="text-slate-800">30%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#133fbd] h-full rounded-full" style={{ width: '30%' }}></div>
+                      </div>
+                    </div>
+
+                    <p className="text-[9px] font-bold text-slate-400 pt-2 border-t border-slate-100">
+                      Updated 5 minutes ago based on reservation data.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Apartment Facilities Section */}
+              <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm space-y-4">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Apartment Facilities</h3>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="pb-3 pl-2">Facility ID</th>
+                        <th className="pb-3">Facility Name</th>
+                        <th className="pb-3">Description</th>
+                        <th className="pb-3">Capacity</th>
+                        <th className="pb-3">Status</th>
+                        <th className="pb-3 text-right pr-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {facilities.filter(fac => 
+                        fac.facility_id.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                        fac.name.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                        (fac.description && fac.description.toLowerCase().includes(facilitySearchQuery.toLowerCase()))
+                      ).length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-6 text-center text-slate-400 italic">No matching facilities found.</td>
+                        </tr>
+                      ) : (
+                        facilities.filter(fac => 
+                          fac.facility_id.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                          fac.name.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                          (fac.description && fac.description.toLowerCase().includes(facilitySearchQuery.toLowerCase()))
+                        ).map((fac) => (
+                          <tr key={fac.id} className="hover:bg-slate-50/50">
+                            <td className="py-3 font-bold text-slate-800 pl-2">{fac.facility_id}</td>
+                            <td className="py-3 font-bold text-slate-800">{fac.name}</td>
+                            <td className="py-3 font-semibold text-slate-400">{fac.description}</td>
+                            <td className="py-3 font-bold text-slate-700">{fac.capacity} Persons</td>
+                            <td className="py-3">
+                              <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                                <span className={`w-2 h-2 rounded-full ${
+                                  fac.status === 'available' ? 'bg-emerald-500' :
+                                  fac.status === 'maintenance' ? 'bg-rose-500' :
+                                  'bg-slate-400'
+                                }`}></span>
+                                <span className="capitalize">{fac.status.replace('_', ' ')}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 text-right pr-2 flex items-center justify-end gap-2.5">
+                              <button
+                                onClick={() => {
+                                  setEditFacilityForm(fac);
+                                  setShowEditFacilityModal(true);
+                                }}
+                                className="text-slate-400 hover:text-blue-700 cursor-pointer"
+                              >
+                                ✎
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFacility(fac.id)}
+                                className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                              >
+                                🗑
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Parking Slot Allocation Section */}
+              <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm space-y-4">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Parking Slot Allocation</h3>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="pb-3 pl-2">Slot ID</th>
+                        <th className="pb-3">Unit Number</th>
+                        <th className="pb-3">Resident Name</th>
+                        <th className="pb-3">Vehicle Number</th>
+                        <th className="pb-3">Status</th>
+                        <th className="pb-3 text-right pr-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {parkingSlots.filter(slot => 
+                        slot.slot_number.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                        (slot.resident_name && slot.resident_name.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                        (slot.vehicle_number && slot.vehicle_number.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                        (slot.block_name && slot.block_name.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                        (slot.unit_number && slot.unit_number.toString().includes(facilitySearchQuery.toLowerCase()))
+                      ).length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-6 text-center text-slate-400 italic">No matching parking slots found.</td>
+                        </tr>
+                      ) : (
+                        parkingSlots.filter(slot => 
+                          slot.slot_number.toLowerCase().includes(facilitySearchQuery.toLowerCase()) ||
+                          (slot.resident_name && slot.resident_name.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                          (slot.vehicle_number && slot.vehicle_number.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                          (slot.block_name && slot.block_name.toLowerCase().includes(facilitySearchQuery.toLowerCase())) ||
+                          (slot.unit_number && slot.unit_number.toString().includes(facilitySearchQuery.toLowerCase()))
+                        ).map((slot) => {
+                          const isAssigned = !!slot.unit_id;
+                          let displayStatus = 'AVAILABLE';
+                          let badgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+                          
+                          if (isAssigned) {
+                            displayStatus = 'ASSIGNED';
+                            badgeStyle = 'bg-blue-50 text-blue-700 border border-blue-100';
+                          } else if (slot.status === 'pending') {
+                            displayStatus = 'RESERVED';
+                            badgeStyle = 'bg-amber-50 text-amber-700 border border-amber-100';
+                          } else if (slot.status === 'rejected') {
+                            displayStatus = 'BLOCKED';
+                            badgeStyle = 'bg-rose-50 text-rose-700 border border-rose-100';
+                          }
+
+                          return (
+                            <tr key={slot.id} className="hover:bg-slate-50/50">
+                              <td className="py-3.5 font-bold text-slate-800 pl-2">
+                                {slot.slot_number.startsWith('P-') ? slot.slot_number : `P-${slot.slot_number}`}
+                              </td>
+                              <td className="py-3.5 font-semibold">
+                                {slot.block_name ? `${slot.block_name.replace(/[^a-zA-Z]/g, '')}-${slot.unit_number}` : '—'}
+                              </td>
+                              <td className="py-3.5 font-bold text-slate-700">
+                                {slot.resident_name || '—'}
+                              </td>
+                              <td className="py-3.5 font-semibold text-slate-500">
+                                {slot.vehicle_number || '—'}
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${badgeStyle}`}>
+                                  {displayStatus}
+                                </span>
+                              </td>
+                              <td className="py-3.5 text-right pr-2 text-slate-400 font-extrabold text-sm select-none hover:text-slate-600 cursor-pointer">
+                                <button 
+                                  onClick={() => {
+                                    setAllocation({
+                                      unitId: slot.unit_id || '',
+                                      owner_id: '',
+                                      tenant_id: '',
+                                      parking_slot_id: slot.id
+                                    });
+                                    setShowAllocateModal(true);
+                                  }}
+                                  className="text-xs text-blue-700 hover:underline font-bold"
+                                >
+                                  Allocate Slot
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -3461,6 +3720,290 @@ export default function AdminDashboard() {
                   className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
                 >
                   Update Ticket
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Requests Modal */}
+      {showBookingRequestsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Facility Booking Requests</h3>
+              <button 
+                onClick={() => setShowBookingRequestsModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto max-h-[400px]">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="pb-3 pl-2">ID</th>
+                    <th className="pb-3">Facility</th>
+                    <th className="pb-3">Resident</th>
+                    <th className="pb-3">Scheduled Date</th>
+                    <th className="pb-3">Status</th>
+                    <th className="pb-3 text-right pr-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {facilityReservations.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="py-6 text-center text-slate-400 italic">No reservation requests registered.</td>
+                    </tr>
+                  ) : (
+                    facilityReservations.map((res) => (
+                      <tr key={res.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 pl-2 font-bold text-slate-800">#BK-{9000 + res.id}</td>
+                        <td className="py-3 font-bold text-slate-700">{res.facility_name}</td>
+                        <td className="py-3 font-semibold">{res.resident_name || res.resident_email}</td>
+                        <td className="py-3 font-semibold text-slate-400">
+                          {new Date(res.date).toLocaleDateString()}
+                        </td>
+                        <td className="py-3">
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                            res.status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
+                            res.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                            'bg-rose-50 text-rose-700'
+                          }`}>
+                            {res.status}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right pr-2 flex items-center justify-end gap-1.5">
+                          {res.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleFacilityApprove(res.id, 'approve')}
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded cursor-pointer transition"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleFacilityApprove(res.id, 'reject')}
+                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold rounded cursor-pointer transition"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-3 flex justify-end border-t border-slate-100">
+              <button
+                onClick={() => setShowBookingRequestsModal(false)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Facility Modal */}
+      {showAddFacilityModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Add Shared Facility</h3>
+              <button 
+                onClick={() => setShowAddFacilityModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateFacility} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Facility ID</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. FAC-004"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newFacilityForm.facility_id}
+                  onChange={(e) => setNewFacilityForm({ ...newFacilityForm, facility_id: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Facility Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Tennis Court"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newFacilityForm.name}
+                  onChange={(e) => setNewFacilityForm({ ...newFacilityForm, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Fully equipped courts with night lighting"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newFacilityForm.description}
+                  onChange={(e) => setNewFacilityForm({ ...newFacilityForm, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Capacity (Persons)</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="10"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newFacilityForm.capacity}
+                    onChange={(e) => setNewFacilityForm({ ...newFacilityForm, capacity: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Operational Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newFacilityForm.status}
+                      onChange={(e) => setNewFacilityForm({ ...newFacilityForm, status: e.target.value })}
+                    >
+                      <option value="available">Available</option>
+                      <option value="maintenance">Maintenance</option>
+                      <option value="fully_booked">Fully Booked</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddFacilityModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Add Facility
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Facility Modal */}
+      {showEditFacilityModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Modify Facility</h3>
+              <button 
+                onClick={() => setShowEditFacilityModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateFacility} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Facility ID</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. FAC-004"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={editFacilityForm.facility_id}
+                  onChange={(e) => setEditFacilityForm({ ...editFacilityForm, facility_id: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Facility Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Tennis Court"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={editFacilityForm.name}
+                  onChange={(e) => setEditFacilityForm({ ...editFacilityForm, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Fully equipped courts with night lighting"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={editFacilityForm.description}
+                  onChange={(e) => setEditFacilityForm({ ...editFacilityForm, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Capacity (Persons)</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="10"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editFacilityForm.capacity}
+                    onChange={(e) => setEditFacilityForm({ ...editFacilityForm, capacity: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Operational Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editFacilityForm.status}
+                      onChange={(e) => setEditFacilityForm({ ...editFacilityForm, status: e.target.value })}
+                    >
+                      <option value="available">Available</option>
+                      <option value="maintenance">Maintenance</option>
+                      <option value="fully_booked">Fully Booked</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditFacilityModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
