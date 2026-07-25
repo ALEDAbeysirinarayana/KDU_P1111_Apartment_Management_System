@@ -3,7 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { 
   Users, Building, FileText, Compass, Bell, Check, X, Plus, Trash2, 
   ShieldAlert, LayoutDashboard, Search, Settings, LogOut, Loader2, 
-  Megaphone, Calendar, ClipboardList, Shield, ShieldAlert as AlertIcon, CreditCard, ChevronDown
+  Megaphone, Calendar, ClipboardList, Shield, ShieldAlert as AlertIcon, CreditCard, ChevronDown,
+  Clock, CheckCircle
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -98,6 +99,17 @@ export default function AdminDashboard() {
   const [showEditFacilityModal, setShowEditFacilityModal] = useState(false);
   const [editFacilityForm, setEditFacilityForm] = useState({ id: '', facility_id: '', name: '', description: '', capacity: 10, status: 'available' });
 
+  // Community Events State
+  const [events, setEvents] = useState([]);
+  const [eventMetrics, setEventMetrics] = useState({ totalEvents: 0, upcomingEvents: 0, activeRegistrations: 0, completedEvents: 0 });
+  const [eventOverview, setEventOverview] = useState([]);
+  const [eventRegistrations, setEventRegistrations] = useState([]);
+  const [eventSearchQuery, setEventSearchQuery] = useState('');
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [newEventForm, setNewEventForm] = useState({ name: '', type: 'Meeting', date: '', time: '', location: '', status: 'Upcoming' });
+  const [showEditEventModal, setShowEditEventModal] = useState(false);
+  const [editEventForm, setEditEventForm] = useState({ id: '', name: '', type: 'Meeting', date: '', time: '', location: '', status: 'Upcoming' });
+
   // Form Input States
   const [newUnit, setNewUnit] = useState({ block_name: '', floor_number: '', unit_number: '', type: '2BHK', status: 'vacant' });
   const [allocation, setAllocation] = useState({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '' });
@@ -186,6 +198,14 @@ export default function AdminDashboard() {
         setFacilityMetrics(resRes.data.metrics || { totalFacilities: 12, activeBookings: 45, pendingRequests: 8, totalParkingSlots: 120 });
         const facRes = await api.get('/facilities');
         setFacilities(facRes.data || []);
+      } else if (activeTab === 'events') {
+        const eventsRes = await api.get('/events', { params: { search: eventSearchQuery } });
+        setEvents(eventsRes.data.events || []);
+        setEventMetrics(eventsRes.data.metrics || { totalEvents: 0, upcomingEvents: 0, activeRegistrations: 0, completedEvents: 0 });
+        setEventOverview(eventsRes.data.participationOverview || []);
+
+        const regsRes = await api.get('/events/registrations', { params: { search: eventSearchQuery } });
+        setEventRegistrations(regsRes.data || []);
       } else if (activeTab === 'notices') {
         const noticesRes = await api.get('/notices');
         setNotices(noticesRes.data);
@@ -209,7 +229,8 @@ export default function AdminDashboard() {
     activeTab, roleFilter, statusFilter, searchQuery, usersPage, 
     residentStatusFilter, residentBlockFilter, residentSearch, residentsPage,
     unitBlockFilter, unitFloorFilter, unitStatusFilter, unitTypeFilter, unitSearchQuery,
-    complaintStatusFilter, complaintCategoryFilter, complaintPriorityFilter, complaintBlockFilter, complaintSearchQuery, complaintsPage
+    complaintStatusFilter, complaintCategoryFilter, complaintPriorityFilter, complaintBlockFilter, complaintSearchQuery, complaintsPage,
+    eventSearchQuery
   ]);
 
   // Handle Approvals
@@ -502,6 +523,64 @@ export default function AdminDashboard() {
     }
   };
 
+  // Create Event
+  const handleCreateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/events', newEventForm);
+      setSuccessMsg('Event created successfully.');
+      setShowAddEventModal(false);
+      setNewEventForm({ name: '', type: 'Meeting', date: '', time: '', location: '', status: 'Upcoming' });
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to create event');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update Event
+  const handleUpdateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/events/${editEventForm.id}`, editEventForm);
+      setSuccessMsg('Event details updated successfully.');
+      setShowEditEventModal(false);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update event');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Delete Event
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('Are you sure you want to delete this event?')) return;
+    try {
+      await api.delete(`/events/${eventId}`);
+      setSuccessMsg('Event deleted successfully.');
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to delete event');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update Attendance
+  const handleUpdateAttendance = async (regId, attendance) => {
+    try {
+      await api.put(`/events/registrations/${regId}/attendance`, { attendance });
+      setSuccessMsg('Attendance status updated successfully.');
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update attendance');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
   // Simulated Alert Action
   const triggerEmergencyAlert = () => {
     alert("System Alert: High-priority emergency notifications sent to all active resident accounts.");
@@ -669,6 +748,7 @@ export default function AdminDashboard() {
               { id: 'units', label: 'Unit & Inventory', icon: Building },
               { id: 'complaints', label: 'Complaints', icon: ClipboardList },
               { id: 'facility', label: 'Facility & Parking', icon: Compass },
+              { id: 'events', label: 'Events', icon: Calendar },
               { id: 'notices', label: 'Notices', icon: Megaphone },
               { id: 'bills', label: 'Payments & Invoice', icon: FileText }
             ].map((tab) => {
@@ -724,6 +804,20 @@ export default function AdminDashboard() {
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Resident Management</h2>
           ) : activeTab === 'units' ? (
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Unit & Inventory Management</h2>
+          ) : activeTab === 'events' ? (
+            <div className="flex items-center gap-4 flex-1">
+              <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Community Events</h2>
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search events or registrations..."
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
+                  value={eventSearchQuery}
+                  onChange={(e) => setEventSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
           ) : activeTab === 'facility' ? (
             <div className="flex items-center gap-4 flex-1">
               <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Facility & Parking Management</h2>
@@ -764,7 +858,8 @@ export default function AdminDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-          )}
+          )
+          }
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-4">
@@ -847,6 +942,16 @@ export default function AdminDashboard() {
               >
                 <span>✳</span>
                 <span>View Emergency Complaints</span>
+              </button>
+            )}
+
+            {activeTab === 'events' && (
+              <button 
+                onClick={() => setShowAddEventModal(true)}
+                className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm animate-in fade-in duration-200"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Event</span>
               </button>
             )}
 
@@ -2858,6 +2963,351 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* 3.6b activeTab = EVENTS */}
+          {activeTab === 'events' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              
+              {/* Event metrics */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                {/* Total Events */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Total Events</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{eventMetrics.totalEvents}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-blue-50/50 flex items-center justify-center shrink-0">
+                    <Calendar className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+
+                {/* Upcoming Events */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Upcoming Events</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{eventMetrics.upcomingEvents}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-amber-50/50 flex items-center justify-center shrink-0">
+                    <Clock className="w-5 h-5 text-amber-600" />
+                  </div>
+                </div>
+
+                {/* Active Registrations */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Active Registrations</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{eventMetrics.activeRegistrations}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50/50 flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+
+                {/* Completed Events */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase block">Completed Events</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{eventMetrics.completedEvents}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-purple-50/50 flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-5 h-5 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Upcoming Community Events Table */}
+              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-bold text-slate-800">Upcoming Community Events</h3>
+                  <button 
+                    onClick={() => setEventSearchQuery('')}
+                    className="text-xs font-bold text-blue-700 hover:underline"
+                  >
+                    View All
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600 font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                        <th className="pb-3 pl-2">Event ID</th>
+                        <th className="pb-3">Event Name</th>
+                        <th className="pb-3">Event Type</th>
+                        <th className="pb-3">Date</th>
+                        <th className="pb-3">Time</th>
+                        <th className="pb-3">Location</th>
+                        <th className="pb-3">Regs</th>
+                        <th className="pb-3">Status</th>
+                        <th className="pb-3 text-right pr-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {events.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-4 text-center text-slate-400 italic">No events found matching criteria.</td>
+                        </tr>
+                      ) : (
+                        events.map((e) => {
+                          let badgeColor = 'bg-slate-50 text-slate-700 border-slate-100';
+                          if (e.status === 'Registration Open') badgeColor = 'bg-emerald-55/10 text-emerald-700 border-emerald-200/40';
+                          else if (e.status === 'Upcoming') badgeColor = 'bg-blue-50 text-blue-700 border-blue-100';
+                          else if (e.status === 'Completed') badgeColor = 'bg-purple-50 text-purple-700 border-purple-100';
+                          else if (e.status === 'Cancelled') badgeColor = 'bg-red-50 text-red-700 border-red-100';
+
+                          return (
+                            <tr key={e.id} className="hover:bg-slate-50/50">
+                              <td className="py-3 pl-2 font-bold text-slate-800">#{e.event_id}</td>
+                              <td className="py-3 font-bold text-slate-700">{e.name}</td>
+                              <td className="py-3 text-slate-500">{e.type}</td>
+                              <td className="py-3 font-semibold text-slate-500">
+                                {new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="py-3 text-slate-500">{e.time}</td>
+                              <td className="py-3 text-slate-500">{e.location}</td>
+                              <td className="py-3 font-bold text-slate-700">{e.regs || 0}</td>
+                              <td className="py-3">
+                                <span className={`px-2.5 py-0.5 rounded text-[9px] font-extrabold uppercase border ${badgeColor}`}>
+                                  {e.status}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right pr-2">
+                                <div className="flex items-center justify-end gap-2.5">
+                                  <button 
+                                    onClick={() => {
+                                      setEditEventForm({
+                                        id: e.id,
+                                        name: e.name,
+                                        type: e.type,
+                                        date: e.date.substring(0, 10),
+                                        time: e.time,
+                                        location: e.location,
+                                        status: e.status
+                                      });
+                                      setShowEditEventModal(true);
+                                    }}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition font-bold"
+                                    title="Edit Event"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteEvent(e.id)}
+                                    className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition font-bold"
+                                    title="Delete Event"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Resident Event Registrations Table */}
+              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-bold text-slate-800">Resident Event Registrations</h3>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => alert("Simulated Action: PDF report generated for resident event registrations.")}
+                      className="py-1 px-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-[10px] font-bold rounded cursor-pointer transition shadow-sm active:scale-95"
+                    >
+                      Export PDF
+                    </button>
+                    <button 
+                      onClick={() => setEventSearchQuery('')}
+                      className="text-xs font-bold text-blue-700 hover:underline"
+                    >
+                      View All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600 font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                        <th className="pb-3 pl-2">Reg ID</th>
+                        <th className="pb-3">Event Name</th>
+                        <th className="pb-3">Resident Name</th>
+                        <th className="pb-3">Unit</th>
+                        <th className="pb-3">Date</th>
+                        <th className="pb-3">Attendance</th>
+                        <th className="pb-3 text-right pr-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {eventRegistrations.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-4 text-center text-slate-400 italic">No registrations found.</td>
+                        </tr>
+                      ) : (
+                        eventRegistrations.map((r) => {
+                          let attendanceBadge = 'bg-blue-50 text-blue-700';
+                          if (r.attendance === 'attended') attendanceBadge = 'bg-emerald-55/10 text-emerald-700 border border-emerald-200/40';
+                          else if (r.attendance === 'no_show') attendanceBadge = 'bg-rose-50 text-rose-700 border border-rose-100';
+
+                          return (
+                            <tr key={r.id} className="hover:bg-slate-50/50">
+                              <td className="py-3 pl-2 font-bold text-slate-800">#{r.reg_id}</td>
+                              <td className="py-3 font-bold text-slate-700">{r.event_name}</td>
+                              <td className="py-3 font-bold text-slate-700">{r.resident_name}</td>
+                              <td className="py-3 text-slate-500 font-semibold">
+                                {r.resident_building ? `${r.resident_building.replace(/[^a-zA-Z]/g, '')}-${r.resident_unit}` : '—'}
+                              </td>
+                              <td className="py-3 text-slate-500">
+                                {new Date(r.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="py-3">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${attendanceBadge}`}>
+                                  {r.attendance}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right pr-2">
+                                {r.attendance === 'registered' ? (
+                                  <button 
+                                    onClick={() => handleUpdateAttendance(r.id, 'attended')}
+                                    className="text-xs font-bold text-blue-700 hover:underline"
+                                  >
+                                    Check-In
+                                  </button>
+                                ) : (
+                                  <div className="flex justify-end items-center gap-2">
+                                    <span className="text-[10px] text-slate-400 font-bold">Checked</span>
+                                    <button 
+                                      onClick={() => handleUpdateAttendance(r.id, 'registered')}
+                                      className="text-[10px] font-bold text-slate-400 hover:text-red-500 hover:underline ml-2"
+                                    >
+                                      Reset
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Event Calendar and Participation Overview Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Event Calendar */}
+                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-sm font-bold text-slate-800">Event Calendar</h3>
+                    <div className="flex items-center gap-4 text-xs font-bold text-blue-700">
+                      <span>&lt;</span>
+                      <span className="uppercase tracking-wider">October 2026</span>
+                      <span>&gt;</span>
+                    </div>
+                  </div>
+                  
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-y-3 text-center text-xs font-bold text-slate-600">
+                    {/* Days Header */}
+                    {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => (
+                      <span key={d} className="text-[9px] text-slate-400 uppercase tracking-wider mb-2">{d}</span>
+                    ))}
+                    
+                    {/* Month start pad (Thursday start) */}
+                    {[...Array(4)].map((_, i) => (
+                      <span key={`pad-${i}`} className="text-slate-200 font-normal">-</span>
+                    ))}
+                    
+                    {/* Day numbers */}
+                    {[...Array(31)].map((_, i) => {
+                      const dayNum = i + 1;
+                      const hasEvent = [14, 29, 31].includes(dayNum);
+                      let dayStyle = 'py-1 text-slate-700';
+                      
+                      if (dayNum === 25) { // current day active style
+                        dayStyle = 'py-1 bg-blue-50 text-blue-700 rounded-lg relative';
+                      } else if (hasEvent) {
+                        dayStyle = 'py-1 bg-blue-600 text-white rounded-lg relative shadow-sm';
+                      }
+
+                      return (
+                        <div key={`day-${dayNum}`} className="flex justify-center items-center">
+                          <span className={`w-8 h-8 flex items-center justify-center font-bold transition ${dayStyle}`}>
+                            {dayNum}
+                            {hasEvent && (
+                              <span className="absolute bottom-1 w-1 h-1 bg-white rounded-full"></span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Event Participation Overview */}
+                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800 mb-6">Event Participation Overview</h3>
+                  <div className="space-y-5">
+                    {eventOverview.length === 0 ? (
+                      <div className="space-y-4">
+                        {[
+                          { name: 'AGM (Annual General Meeting)', residents: 156, pct: 90 },
+                          { name: 'Community Fire Drill', residents: 124, pct: 70 },
+                          { name: 'New Year Celebration', residents: 142, pct: 80 },
+                          { name: 'Neighborhood Cleanup', residents: 65, pct: 40 }
+                        ].map((item, idx) => (
+                          <div key={idx}>
+                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-2">
+                              <span>{item.name}</span>
+                              <span className="text-slate-500">{item.residents} Residents</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div style={{ width: `${item.pct}%` }} className="h-full bg-blue-600/80 rounded-full"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      eventOverview.map((item, idx) => {
+                        const pct = Math.min(100, Math.round((item.residents / 180) * 100));
+                        return (
+                          <div key={idx}>
+                            <div className="flex justify-between text-xs font-bold text-slate-700 mb-2 font-sans">
+                              <span>{item.name}</span>
+                              <span className="text-slate-500 font-sans">{item.residents} Residents</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div style={{ width: `${pct}%` }} className="h-full bg-blue-600/85 rounded-full"></div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Legend indicator */}
+                  <div className="flex gap-4 justify-center items-center mt-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                      <span>Active</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-200"></span>
+                      <span>Pending</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
           {/* 3.7 activeTab = NOTICES */}
           {activeTab === 'notices' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -3995,6 +4445,232 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowEditFacilityModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Event Modal */}
+      {showAddEventModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Create Community Event</h3>
+              <button 
+                onClick={() => setShowAddEventModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateEvent} className="space-y-4 font-sans">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Event Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Annual General Meeting"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newEventForm.name}
+                  onChange={(e) => setNewEventForm({ ...newEventForm, name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Event Type</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Meeting, Festival"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newEventForm.type}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, type: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Location</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Clubhouse"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newEventForm.location}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, location: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newEventForm.date}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Time</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 6:00 PM"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newEventForm.time}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, time: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Registration Status</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={newEventForm.status}
+                    onChange={(e) => setNewEventForm({ ...newEventForm, status: e.target.value })}
+                  >
+                    <option value="Upcoming">Upcoming</option>
+                    <option value="Registration Open">Registration Open</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEventModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Create Event
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Event Modal */}
+      {showEditEventModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Modify Event</h3>
+              <button 
+                onClick={() => setShowEditEventModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEvent} className="space-y-4 font-sans">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Event Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Annual General Meeting"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={editEventForm.name}
+                  onChange={(e) => setEditEventForm({ ...editEventForm, name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Event Type</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Meeting, Festival"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editEventForm.type}
+                    onChange={(e) => setEditEventForm({ ...editEventForm, type: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Location</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Clubhouse"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editEventForm.location}
+                    onChange={(e) => setEditEventForm({ ...editEventForm, location: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editEventForm.date}
+                    onChange={(e) => setEditEventForm({ ...editEventForm, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Time</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 6:00 PM"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={editEventForm.time}
+                    onChange={(e) => setEditEventForm({ ...editEventForm, time: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Registration Status</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={editEventForm.status}
+                    onChange={(e) => setEditEventForm({ ...editEventForm, status: e.target.value })}
+                  >
+                    <option value="Upcoming">Upcoming</option>
+                    <option value="Registration Open">Registration Open</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditEventModal(false)}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
                 >
                   Cancel

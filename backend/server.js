@@ -9,6 +9,7 @@ const facilityRoutes = require('./routes/facilityRoutes');
 const parkingRoutes = require('./routes/parkingRoutes');
 const noticeRoutes = require('./routes/noticeRoutes');
 const billRoutes = require('./routes/billRoutes');
+const eventRoutes = require('./routes/eventRoutes');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/api/facilities', facilityRoutes);
 app.use('/api/parking', parkingRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/bills', billRoutes);
+app.use('/api/events', eventRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

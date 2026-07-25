@@ -22,7 +22,7 @@ export default function MaintenanceDashboard() {
     setLoading(true);
     try {
       const res = await api.get('/complaints');
-      setComplaints(res.data);
+      setComplaints(Array.isArray(res.data) ? res.data : (res.data.complaints || []));
     } catch (error) {
       console.error('Failed to fetch complaints:', error);
       setErrorMsg('Failed to load work order complaints.');
@@ -85,9 +85,9 @@ export default function MaintenanceDashboard() {
 
   // Filter list by search query
   const filteredComplaints = complaints.filter(c => 
-    c.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.resident_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.resident_email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     String(c.id).includes(searchQuery)
   );
 

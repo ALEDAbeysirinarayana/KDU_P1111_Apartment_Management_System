@@ -37,8 +37,9 @@ export default function ResidentDashboard() {
   // New Request popup shortcut
   const [showNewRequestMenu, setShowNewRequestMenu] = useState(false);
 
-  // Mock registrations state for events
-  const [registeredEvents, setRegisteredEvents] = useState(['yoga']);
+  // Community Events state
+  const [events, setEvents] = useState([]);
+  const [registeredEvents, setRegisteredEvents] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -54,12 +55,24 @@ export default function ResidentDashboard() {
       if (activeTab === 'dashboard') {
         const statsRes = await api.get('/auth/resident-dashboard-stats');
         setResidentStats(statsRes.data);
+        
+        try {
+          const eventsRes = await api.get('/events');
+          // Only show upcoming/open events
+          const upcomingEvents = (eventsRes.data.events || []).filter(e => e.status !== 'Completed');
+          setEvents(upcomingEvents);
+
+          const myRegsRes = await api.get('/events/my-registrations');
+          setRegisteredEvents(myRegsRes.data || []);
+        } catch (e) {
+          console.error("Failed to load events:", e);
+        }
       } else if (activeTab === 'bills') {
         const billsRes = await api.get('/bills');
         setBills(billsRes.data);
       } else if (activeTab === 'complaints') {
         const compRes = await api.get('/complaints');
-        setComplaints(compRes.data);
+        setComplaints(Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []));
       } else if (activeTab === 'facility') {
         const resRes = await api.get('/facilities/reservations');
         setReservations(resRes.data);
@@ -188,13 +201,26 @@ export default function ResidentDashboard() {
   };
 
   // Toggle event registration
-  const toggleRegisterEvent = (eventId) => {
-    if (registeredEvents.includes(eventId)) {
-      setRegisteredEvents(registeredEvents.filter(id => id !== eventId));
-      setSuccessMsg("Successfully unregistered from event.");
-    } else {
-      setRegisteredEvents([...registeredEvents, eventId]);
-      setSuccessMsg("Successfully registered for event!");
+  const toggleRegisterEvent = async (eventId) => {
+    try {
+      if (registeredEvents.includes(eventId)) {
+        await api.post(`/events/${eventId}/unregister`);
+        setRegisteredEvents(registeredEvents.filter(id => id !== eventId));
+        setSuccessMsg("Successfully unregistered from event.");
+      } else {
+        await api.post(`/events/${eventId}/register`);
+        setRegisteredEvents([...registeredEvents, eventId]);
+        setSuccessMsg("Successfully registered for event!");
+      }
+      // Reload stats and events to get fresh registration counts
+      const statsRes = await api.get('/auth/resident-dashboard-stats');
+      setResidentStats(statsRes.data);
+      const eventsRes = await api.get('/events');
+      const upcomingEvents = (eventsRes.data.events || []).filter(e => e.status !== 'Completed');
+      setEvents(upcomingEvents);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Action failed.');
+      setTimeout(() => setErrorMsg(''), 4000);
     }
     setTimeout(() => setSuccessMsg(''), 3000);
   };
@@ -663,51 +689,38 @@ export default function ResidentDashboard() {
                 <div className="bg-white border border-slate-200/50 p-5 rounded-2xl shadow-sm space-y-4">
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Upcoming Events</h3>
                   <div className="space-y-3">
-                    {/* Event 1 */}
-                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2.5">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-800">Yoga Morning Session</h4>
-                          <span className="text-[9px] text-slate-400 font-semibold block mt-0.5">Terrace Lounge • Oct 10, 07:00 AM</span>
-                        </div>
-                        {registeredEvents.includes('yoga') && (
-                          <span className="text-[8px] font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded uppercase">Registered</span>
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => toggleRegisterEvent('yoga')}
-                        className={`w-full py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition text-center ${
-                          registeredEvents.includes('yoga')
-                            ? 'bg-slate-200 hover:bg-slate-300 text-slate-600'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white'
-                        }`}
-                      >
-                        {registeredEvents.includes('yoga') ? 'Unregister' : 'Register Now'}
-                      </button>
-                    </div>
-
-                    {/* Event 2 */}
-                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2.5">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-800">Digital Detox Seminar</h4>
-                          <span className="text-[9px] text-slate-400 font-semibold block mt-0.5">Community Hall • Oct 15, 06:00 PM</span>
-                        </div>
-                        {registeredEvents.includes('detox') && (
-                          <span className="text-[8px] font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded uppercase">Registered</span>
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => toggleRegisterEvent('detox')}
-                        className={`w-full py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition text-center ${
-                          registeredEvents.includes('detox')
-                            ? 'bg-slate-200 hover:bg-slate-300 text-slate-600'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white'
-                        }`}
-                      >
-                        {registeredEvents.includes('detox') ? 'Unregister' : 'Register Now'}
-                      </button>
-                    </div>
+                    {events.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No upcoming community events scheduled.</p>
+                    ) : (
+                      events.map((e) => {
+                        const isRegistered = registeredEvents.includes(e.id);
+                        return (
+                          <div key={e.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2.5">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="text-xs font-bold text-slate-800">{e.name}</h4>
+                                <span className="text-[9px] text-slate-400 font-semibold block mt-0.5">
+                                  {e.location} • {new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {e.time}
+                                </span>
+                              </div>
+                              {isRegistered && (
+                                <span className="text-[8px] font-extrabold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded uppercase">Registered</span>
+                              )}
+                            </div>
+                            <button 
+                              onClick={() => toggleRegisterEvent(e.id)}
+                              className={`w-full py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition text-center ${
+                                isRegistered
+                                  ? 'bg-slate-200 hover:bg-slate-300 text-slate-600'
+                                  : 'bg-blue-600 hover:bg-blue-500 text-white'
+                              }`}
+                            >
+                              {isRegistered ? 'Unregister' : 'Register Now'}
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
