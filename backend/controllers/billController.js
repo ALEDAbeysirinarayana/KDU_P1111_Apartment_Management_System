@@ -120,25 +120,68 @@ const getBills = async (req, res) => {
         transactions
       });
     } else {
-      // Resident view – just their own bills
+      // Resident view – their own bills with full metrics + transactions
       let unitQuery = role === 'homeowner'
         ? 'SELECT id FROM units WHERE owner_id = ?'
         : 'SELECT id FROM units WHERE tenant_id = ?';
       const [units] = await pool.query(unitQuery, [userId]);
-      if (units.length === 0) return res.status(200).json({ bills: [], metrics: {} });
+      if (units.length === 0) return res.status(200).json({ bills: [], metrics: {}, transactions: [] });
 
       const unitId = units[0].id;
       const [bills] = await pool.query(`
         SELECT * FROM bills WHERE unit_id = ? ORDER BY due_date DESC
       `, [unitId]);
 
-      return res.status(200).json({ bills });
+      // Metrics for this unit
+      const [[metrics]] = await pool.query(`
+        SELECT
+          COUNT(*) AS totalInvoices,
+          SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS totalPaid,
+          SUM(CASE WHEN status = 'unpaid' THEN amount ELSE 0 END) AS pendingAmount,
+          COUNT(CASE WHEN status = 'unpaid' THEN 1 END) AS pendingCount,
+          SUM(CASE WHEN status = 'unpaid' AND due_date < CURDATE() THEN amount ELSE 0 END) AS overdueAmount,
+          COUNT(CASE WHEN status = 'unpaid' AND due_date < CURDATE() THEN 1 END) AS overdueCount
+        FROM bills WHERE unit_id = ?
+      `, [unitId]);
+
+      // Outstanding unpaid bills (for the outstanding card)
+      const [unpaidBills] = await pool.query(`
+        SELECT * FROM bills WHERE unit_id = ? AND status = 'unpaid' ORDER BY due_date ASC LIMIT 1
+      `, [unitId]);
+
+      // Transactions for this unit
+      const [transactions] = await pool.query(`
+        SELECT pt.*, b.invoice_id, b.description
+        FROM payment_transactions pt
+        JOIN bills b ON pt.bill_id = b.id
+        WHERE pt.unit_id = ?
+        ORDER BY pt.created_at DESC
+        LIMIT 20
+      `, [unitId]);
+
+      return res.status(200).json({
+        bills,
+        metrics: {
+          totalInvoices: metrics.totalInvoices || 0,
+          totalPaid: parseFloat(metrics.totalPaid || 0),
+          pendingAmount: parseFloat(metrics.pendingAmount || 0),
+          pendingCount: metrics.pendingCount || 0,
+          overdueAmount: parseFloat(metrics.overdueAmount || 0),
+          overdueCount: metrics.overdueCount || 0,
+          outstandingAmount: parseFloat(metrics.pendingAmount || 0),
+          nextDueDate: unpaidBills.length > 0 ? unpaidBills[0].due_date : null,
+          nextDueBillId: unpaidBills.length > 0 ? unpaidBills[0].id : null,
+          nextDueAmount: unpaidBills.length > 0 ? parseFloat(unpaidBills[0].amount) : 0,
+        },
+        transactions,
+      });
     }
   } catch (error) {
     console.error('Get bills error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
 
 // @desc    Create a bill / invoice
 // @route   POST /api/bills

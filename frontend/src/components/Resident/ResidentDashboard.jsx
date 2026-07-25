@@ -20,6 +20,12 @@ export default function ResidentDashboard() {
   // Tab Data States
   const [myUnit, setMyUnit] = useState(null);
   const [bills, setBills] = useState([]);
+  const [paymentMetrics, setPaymentMetrics] = useState({ totalInvoices: 0, totalPaid: 0, pendingAmount: 0, pendingCount: 0, overdueAmount: 0, overdueCount: 0, outstandingAmount: 0, nextDueDate: null, nextDueBillId: null, nextDueAmount: 0 });
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+  const [billStatusFilter, setBillStatusFilter] = useState('All');
+  const [payingBillId, setPayingBillId] = useState(null);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [selectedBillToPay, setSelectedBillToPay] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [notices, setNotices] = useState([]);
   const [reservations, setReservations] = useState([]);
@@ -83,9 +89,12 @@ export default function ResidentDashboard() {
         } catch (e) {
           console.error("Failed to load events:", e);
         }
-      } else if (activeTab === 'bills') {
+      } else if (activeTab === 'payments') {
         const billsRes = await api.get('/bills');
-        setBills(billsRes.data);
+        const data = billsRes.data;
+        setBills(Array.isArray(data) ? data : (data.bills || []));
+        setPaymentMetrics(data.metrics || { totalInvoices: 0, totalPaid: 0, pendingAmount: 0, pendingCount: 0, overdueAmount: 0, overdueCount: 0, outstandingAmount: 0, nextDueDate: null, nextDueBillId: null, nextDueAmount: 0 });
+        setPaymentTransactions(Array.isArray(data.transactions) ? data.transactions : []);
       } else if (activeTab === 'complaints') {
         const [compRes, statsRes] = await Promise.all([
           api.get('/complaints'),
@@ -144,18 +153,6 @@ export default function ResidentDashboard() {
     fetchData();
   }, [activeTab]);
 
-  // Pay Bill
-  const handlePayBill = async (billId) => {
-    try {
-      await api.put(`/bills/${billId}/pay`);
-      setSuccessMsg('Bill paid successfully via mock secure gateway!');
-      fetchData();
-      setTimeout(() => setSuccessMsg(''), 4000);
-    } catch (error) {
-      setErrorMsg(error.response?.data?.message || 'Payment failed');
-      setTimeout(() => setErrorMsg(''), 4000);
-    }
-  };
 
   // Submit Complaint
   const handleSubmitComplaint = async (e) => {
@@ -243,6 +240,29 @@ export default function ResidentDashboard() {
     }
   };
 
+
+  // Pay a bill (resident)
+  const handlePayBill = async (billId, method = 'Online Payment') => {
+    setPayingBillId(billId);
+    try {
+      await api.put(`/bills/${billId}/pay`, { payment_method: method });
+      setSuccessMsg('Payment successful! Your invoice has been marked as paid.');
+      setShowPayModal(false);
+      setSelectedBillToPay(null);
+      // Refresh in-place
+      const billsRes = await api.get('/bills');
+      const data = billsRes.data;
+      setBills(Array.isArray(data) ? data : (data.bills || []));
+      setPaymentMetrics(data.metrics || {});
+      setPaymentTransactions(Array.isArray(data.transactions) ? data.transactions : []);
+      setTimeout(() => setSuccessMsg(''), 5000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Payment failed. Please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } finally {
+      setPayingBillId(null);
+    }
+  };
 
   // Request Guest Parking
   const handleRequestParking = async (e) => {
@@ -1972,62 +1992,450 @@ export default function ResidentDashboard() {
 
 
           {/* 3.4 activeTab = PAYMENTS */}
-          {activeTab === 'payments' && (
-            <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-800">Utility Billing & Invoice History</h3>
-              {bills.length === 0 ? (
-                <p className="text-slate-400 text-xs italic">No utility logs found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                        <th className="pb-3">Invoice ID</th>
-                        <th className="pb-3">Description</th>
-                        <th className="pb-3">Amount</th>
-                        <th className="pb-3">Due Date</th>
-                        <th className="pb-3">Status</th>
-                        <th className="pb-3 text-right">Payment Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {bills.map((bill) => (
-                        <tr key={bill.id} className="hover:bg-slate-50/50">
-                          <td className="py-3.5 font-bold text-slate-800">#INV-{bill.id}</td>
-                          <td className="py-3.5 font-medium">{bill.description}</td>
-                          <td className="py-3.5 text-slate-800 font-black">${bill.amount}</td>
-                          <td className="py-3.5 text-slate-400 font-semibold">
-                            {new Date(bill.due_date).toLocaleDateString()}
-                          </td>
-                          <td className="py-3.5">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                              bill.status === 'paid'
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'bg-red-50 text-red-700'
-                            }`}>
-                              {bill.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 text-right">
-                            {bill.status === 'unpaid' ? (
-                              <button
-                                onClick={() => handlePayBill(bill.id)}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
-                              >
-                                Pay Invoice
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-bold">Processed</span>
-                            )}
-                          </td>
-                        </tr>
+          {activeTab === 'payments' && (() => {
+            const fmt = (n) => `$${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const today = new Date();
+
+            const filteredBills = bills.filter(b => {
+              if (billStatusFilter === 'All') return true;
+              if (billStatusFilter === 'Paid') return b.status === 'paid';
+              if (billStatusFilter === 'Pending') return b.status === 'unpaid' && new Date(b.due_date) >= today;
+              if (billStatusFilter === 'Overdue') return b.status === 'unpaid' && new Date(b.due_date) < today;
+              return true;
+            });
+
+            const paidProgress = paymentMetrics.totalInvoices > 0
+              ? Math.round(((paymentMetrics.totalInvoices - paymentMetrics.pendingCount) / paymentMetrics.totalInvoices) * 100)
+              : 0;
+
+            const isOverdue = (bill) => bill.status === 'unpaid' && new Date(bill.due_date) < today;
+            const daysOverdue = (bill) => Math.floor((today - new Date(bill.due_date)) / 86400000);
+            const daysUntilDue = (dateStr) => Math.ceil((new Date(dateStr) - today) / 86400000);
+
+            return (
+              <>
+                {/* Pay Modal */}
+                {showPayModal && selectedBillToPay && (
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                      <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-sm font-black text-slate-800">Confirm Payment</h3>
+                        <button onClick={() => { setShowPayModal(false); setSelectedBillToPay(null); }} className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer transition">
+                          <X className="w-3.5 h-3.5 text-slate-500" />
+                        </button>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-4 mb-5 space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500 font-medium">Invoice</span>
+                          <span className="font-bold text-slate-800">{selectedBillToPay.invoice_id || `#INV-${selectedBillToPay.id}`}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500 font-medium">Description</span>
+                          <span className="font-semibold text-slate-700 text-right max-w-[180px] truncate">{selectedBillToPay.description}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500 font-medium">Due Date</span>
+                          <span className={`font-semibold ${isOverdue(selectedBillToPay) ? 'text-red-600' : 'text-slate-700'}`}>
+                            {new Date(selectedBillToPay.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {isOverdue(selectedBillToPay) && <span className="ml-1 text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">{daysOverdue(selectedBillToPay)}d overdue</span>}
+                          </span>
+                        </div>
+                        <div className="border-t border-slate-200 pt-2 flex justify-between">
+                          <span className="text-xs font-bold text-slate-800">Total Amount</span>
+                          <span className="text-lg font-black text-[#133fbd]">{fmt(selectedBillToPay.amount)}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium mb-4">Payment will be processed as <span className="font-bold text-slate-600">Online Payment</span>. This action cannot be undone.</p>
+                      <div className="flex gap-3">
+                        <button onClick={() => { setShowPayModal(false); setSelectedBillToPay(null); }} className="flex-1 py-2.5 border border-slate-200 text-slate-600 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-50 transition">Cancel</button>
+                        <button
+                          onClick={() => handlePayBill(selectedBillToPay.id)}
+                          disabled={payingBillId === selectedBillToPay.id}
+                          className="flex-1 py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          {payingBillId === selectedBillToPay.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...</> : <><CreditCard className="w-3.5 h-3.5" /> Pay Now</>}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                  {/* LEFT COLUMN (2/3) */}
+                  <div className="lg:col-span-2 space-y-5">
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-base font-black text-slate-800">Payments &amp; Invoices</h2>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">View your invoices, make payments, and download receipts.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-50 transition">
+                          <Upload className="w-3 h-3" /> Download Report
+                        </button>
+                        <button
+                          onClick={() => {
+                            const nextBill = bills.find(b => b.status === 'unpaid');
+                            if (nextBill) { setSelectedBillToPay(nextBill); setShowPayModal(true); }
+                          }}
+                          disabled={!bills.some(b => b.status === 'unpaid')}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <CreditCard className="w-3 h-3" /> Make a Payment
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        {
+                          label: 'Total Invoices',
+                          value: paymentMetrics.totalInvoices || 0,
+                          sub: 'Last 12 months',
+                          subColor: 'text-slate-400',
+                          valueClass: 'text-slate-800',
+                          border: ''
+                        },
+                        {
+                          label: 'Pending',
+                          value: fmt(paymentMetrics.pendingAmount),
+                          sub: `${paymentMetrics.pendingCount || 0} invoice${(paymentMetrics.pendingCount || 0) !== 1 ? 's' : ''} awaiting action`,
+                          subColor: 'text-slate-500',
+                          valueClass: 'text-slate-800',
+                          border: ''
+                        },
+                        {
+                          label: 'Overdue',
+                          value: fmt(paymentMetrics.overdueAmount),
+                          sub: `${paymentMetrics.overdueCount || 0} overdue invoice${(paymentMetrics.overdueCount || 0) !== 1 ? 's' : ''}`,
+                          subColor: 'text-red-500',
+                          valueClass: 'text-red-600',
+                          border: 'border-b-2 border-red-400'
+                        },
+                        {
+                          label: 'Total Paid',
+                          value: fmt(paymentMetrics.totalPaid),
+                          sub: 'Lifetime payments',
+                          subColor: 'text-emerald-500',
+                          valueClass: 'text-slate-800',
+                          border: ''
+                        },
+                      ].map((s, i) => (
+                        <div key={i} className={`bg-white border border-slate-200/60 p-4 rounded-xl shadow-sm ${s.border}`}>
+                          <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                          <p className={`text-xl font-black mt-1.5 ${s.valueClass}`}>{s.value}</p>
+                          <p className={`text-[9px] font-bold mt-1 ${s.subColor}`}>{s.sub}</p>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+
+                    {/* Outstanding Amount Card */}
+                    <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: 'linear-gradient(135deg, #133fbd 0%, #1e3a5f 100%)' }}>
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Outstanding Amount</p>
+                            <h2 className="text-3xl font-black text-white mt-1">{fmt(paymentMetrics.outstandingAmount)}</h2>
+                          </div>
+                          {paymentMetrics.nextDueDate && (
+                            <div className="text-right">
+                              <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Next Due Date</p>
+                              <p className="text-sm font-black text-white mt-1">
+                                {new Date(paymentMetrics.nextDueDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                              </p>
+                              {daysUntilDue(paymentMetrics.nextDueDate) <= 7 && daysUntilDue(paymentMetrics.nextDueDate) >= 0 && (
+                                <span className="text-[9px] font-bold text-amber-300">
+                                  Due in {daysUntilDue(paymentMetrics.nextDueDate)} day{daysUntilDue(paymentMetrics.nextDueDate) !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="text-[9px] font-bold text-white/60">Paid Progress</p>
+                            <p className="text-[9px] font-bold text-white/60">{paidProgress}% Collected</p>
+                          </div>
+                          <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-white rounded-full transition-all duration-700"
+                              style={{ width: `${paidProgress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-4">
+                          {paymentMetrics.nextDueDate && (
+                            <span className="text-[9px] font-bold text-white/60 bg-white/10 px-2.5 py-1 rounded-full">
+                              Latest: {new Date(paymentMetrics.nextDueDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => {
+                              const nextBill = bills.find(b => b.status === 'unpaid');
+                              if (nextBill) { setSelectedBillToPay(nextBill); setShowPayModal(true); }
+                            }}
+                            disabled={!bills.some(b => b.status === 'unpaid')}
+                            className="px-5 py-2 bg-white text-[#133fbd] text-xs font-black rounded-xl cursor-pointer hover:bg-slate-100 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+                          >
+                            Pay Now
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Invoices */}
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+                        <h3 className="text-sm font-black text-slate-800">Recent Invoices</h3>
+                        <div className="flex items-center gap-1.5">
+                          {['All', 'Pending', 'Overdue', 'Paid'].map(f => (
+                            <button
+                              key={f}
+                              onClick={() => setBillStatusFilter(f)}
+                              className={`px-2.5 py-1 text-[9px] font-bold rounded-lg cursor-pointer transition ${
+                                billStatusFilter === f
+                                  ? 'bg-[#133fbd] text-white'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              }`}
+                            >
+                              {f}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {filteredBills.length === 0 ? (
+                        <div className="px-5 pb-5">
+                          <p className="text-slate-400 text-xs italic">No invoices found.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-600">
+                            <thead>
+                              <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                                <th className="px-5 py-3">Invoice ID</th>
+                                <th className="px-5 py-3">Description</th>
+                                <th className="px-5 py-3">Due Date</th>
+                                <th className="px-5 py-3">Amount</th>
+                                <th className="px-5 py-3">Status</th>
+                                <th className="px-5 py-3 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {filteredBills.map((bill) => {
+                                const overdue = isOverdue(bill);
+                                return (
+                                  <tr key={bill.id} className="hover:bg-slate-50/50">
+                                    <td className="px-5 py-3.5 font-black text-slate-700 text-[11px]">
+                                      {bill.invoice_id || `#INV-${String(bill.id).padStart(4, '0')}`}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-slate-500 font-medium truncate max-w-[140px]">{bill.description}</td>
+                                    <td className="px-5 py-3.5">
+                                      <span className={`font-semibold ${overdue ? 'text-red-600' : 'text-slate-500'}`}>
+                                        {new Date(bill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </span>
+                                      {overdue && (
+                                        <span className="block text-[9px] font-bold text-red-500">{daysOverdue(bill)}d overdue</span>
+                                      )}
+                                    </td>
+                                    <td className="px-5 py-3.5 font-black text-slate-800">{fmt(bill.amount)}</td>
+                                    <td className="px-5 py-3.5">
+                                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                        bill.status === 'paid'
+                                          ? 'bg-emerald-50 text-emerald-700'
+                                          : overdue
+                                          ? 'bg-red-50 text-red-700'
+                                          : 'bg-amber-50 text-amber-700'
+                                      }`}>
+                                        {bill.status === 'paid' ? 'PAID' : overdue ? 'OVD' : 'PND'}
+                                      </span>
+                                    </td>
+                                    <td className="px-5 py-3.5 text-right">
+                                      {bill.status === 'unpaid' ? (
+                                        <button
+                                          onClick={() => { setSelectedBillToPay(bill); setShowPayModal(true); }}
+                                          disabled={payingBillId === bill.id}
+                                          className="px-3 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[9px] font-bold rounded-lg cursor-pointer transition disabled:opacity-50 flex items-center gap-1 ml-auto"
+                                        >
+                                          {payingBillId === bill.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
+                                          Pay
+                                        </button>
+                                      ) : (
+                                        <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-end gap-1">
+                                          <CheckCircle className="w-3 h-3" /> Paid
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Transaction History */}
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 pt-5 pb-3">
+                        <h3 className="text-sm font-black text-slate-800">Transaction History</h3>
+                      </div>
+                      {paymentTransactions.length === 0 ? (
+                        <div className="px-5 pb-5">
+                          <p className="text-slate-400 text-xs italic">No transactions recorded yet.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-600">
+                            <thead>
+                              <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                                <th className="px-5 py-3">Reference</th>
+                                <th className="px-5 py-3">Invoice</th>
+                                <th className="px-5 py-3">Amount</th>
+                                <th className="px-5 py-3">Date</th>
+                                <th className="px-5 py-3">Method</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {paymentTransactions.map((tx) => (
+                                <tr key={tx.id} className="hover:bg-slate-50/50">
+                                  <td className="px-5 py-3.5 font-black text-slate-700 text-[10px]">#{tx.transaction_id}</td>
+                                  <td className="px-5 py-3.5 text-slate-500 font-semibold text-[10px]">{tx.invoice_id}</td>
+                                  <td className="px-5 py-3.5 font-black text-slate-800">{fmt(tx.amount)}</td>
+                                  <td className="px-5 py-3.5 text-slate-400 font-medium">
+                                    {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </td>
+                                  <td className="px-5 py-3.5">
+                                    <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[9px] font-bold rounded-lg">
+                                      {tx.method || 'Online'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* RIGHT SIDEBAR */}
+                  <div className="space-y-4">
+
+                    {/* Action Required */}
+                    {(paymentMetrics.pendingCount > 0 || paymentMetrics.overdueCount > 0) && (
+                      <div className="bg-white border border-orange-200 rounded-2xl shadow-sm p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center">
+                            <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                          </div>
+                          <h3 className="text-xs font-black text-slate-800">Action Required</h3>
+                        </div>
+                        <div className="space-y-3">
+                          {paymentMetrics.nextDueDate && paymentMetrics.pendingCount > 0 && (() => {
+                            const d = daysUntilDue(paymentMetrics.nextDueDate);
+                            return d >= 0 && d <= 14 ? (
+                              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                <p className="text-[9px] font-black text-amber-700 uppercase tracking-wider mb-1">Upcoming Due Date</p>
+                                <p className="text-[10px] text-amber-800 font-semibold leading-relaxed">
+                                  Invoice for {fmt(paymentMetrics.nextDueAmount)} is due in {d} day{d !== 1 ? 's' : ''}.
+                                </p>
+                              </div>
+                            ) : null;
+                          })()}
+                          {paymentMetrics.overdueCount > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                              <p className="text-[9px] font-black text-red-700 uppercase tracking-wider mb-1">Overdue Payment</p>
+                              <p className="text-[10px] text-red-800 font-semibold leading-relaxed">
+                                {paymentMetrics.overdueCount} invoice{paymentMetrics.overdueCount !== 1 ? 's are' : ' is'} overdue totalling {fmt(paymentMetrics.overdueAmount)}.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Methods */}
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xs font-black text-slate-800">Payment Methods</h3>
+                        <span className="text-[10px] font-bold text-blue-600 cursor-pointer hover:underline">Manage</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="w-8 h-8 rounded-lg bg-[#133fbd] flex items-center justify-center shrink-0">
+                            <CreditCard className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-black text-slate-800">Online Payment</p>
+                            <p className="text-[9px] text-slate-400 font-medium">Instant processing</p>
+                          </div>
+                          <span className="text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Default</span>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                            <Building className="w-4 h-4 text-slate-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-black text-slate-800">Bank Transfer</p>
+                            <p className="text-[9px] text-slate-400 font-medium">Setup Direct Debit</p>
+                          </div>
+                        </div>
+                        <button className="w-full py-2 border border-dashed border-slate-300 text-slate-500 text-[10px] font-bold rounded-xl cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1.5">
+                          <Plus className="w-3 h-3" /> Add New Method
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Paperless Billing Promo */}
+                    <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)' }}>
+                      <div className="p-5">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/30 flex items-center justify-center mb-3">
+                          <FileText className="w-4 h-4 text-blue-300" />
+                        </div>
+                        <h3 className="text-sm font-black text-white mb-1">Paperless Billing</h3>
+                        <p className="text-[10px] text-white/60 font-medium leading-relaxed mb-4">
+                          Switch to digital receipts and save on maintenance fees.
+                        </p>
+                        <button className="text-[10px] font-black text-blue-400 hover:text-blue-300 cursor-pointer transition flex items-center gap-1">
+                          Enable Now <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Payment Summary */}
+                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm p-5">
+                      <h3 className="text-xs font-black text-slate-800 mb-4">Payment Summary</h3>
+                      <div className="space-y-3">
+                        {[
+                          { label: 'Total Invoices', value: paymentMetrics.totalInvoices || 0, color: 'text-slate-800' },
+                          { label: 'Paid', value: (paymentMetrics.totalInvoices || 0) - (paymentMetrics.pendingCount || 0), color: 'text-emerald-600' },
+                          { label: 'Pending', value: paymentMetrics.pendingCount || 0, color: 'text-amber-600' },
+                          { label: 'Overdue', value: paymentMetrics.overdueCount || 0, color: 'text-red-600' },
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-medium">{item.label}</span>
+                            <span className={`text-[11px] font-black ${item.color}`}>{item.value}</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 font-medium">Amount Paid</span>
+                          <span className="text-xs font-black text-slate-800">{fmt(paymentMetrics.totalPaid)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              </>
+            );
+          })()}
 
           {/* 3.5 activeTab = PARKING (Guest parking requests) */}
           {activeTab === 'parking' && (
