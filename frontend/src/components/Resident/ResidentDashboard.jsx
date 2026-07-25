@@ -76,7 +76,7 @@ export default function ResidentDashboard() {
         setComplaints(Array.isArray(compRes.data) ? compRes.data : (compRes.data.complaints || []));
       } else if (activeTab === 'facility') {
         const resRes = await api.get('/facilities/reservations');
-        setReservations(resRes.data);
+        setReservations(Array.isArray(resRes.data) ? resRes.data : (resRes.data.reservations || []));
       } else if (activeTab === 'notices') {
         const noticesRes = await api.get('/notices');
         setNotices(noticesRes.data.notices || []);
