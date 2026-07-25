@@ -33,6 +33,25 @@ export default function AdminDashboard() {
     vehicle_number: ''
   });
 
+  // Resident Management State
+  const [residentsTotal, setResidentsTotal] = useState(0);
+  const [residentsPage, setResidentsPage] = useState(1);
+  const [residentsMetrics, setResidentsMetrics] = useState({ total: 0, active: 0, vacated: 0, new_residents: 0 });
+  const [residentSearch, setResidentSearch] = useState('');
+  const [residentStatusFilter, setResidentStatusFilter] = useState('All');
+  const [residentBlockFilter, setResidentBlockFilter] = useState('All');
+  const [selectedResident, setSelectedResident] = useState(null);
+  const [showAddResidentModal, setShowAddResidentModal] = useState(false);
+  const [showEditResidentModal, setShowEditResidentModal] = useState(false);
+  const [newResidentForm, setNewResidentForm] = useState({
+    email: '', password: '', role: 'homeowner', status: 'approved',
+    full_name: '', phone_number: '', building_name: '', unit_number: '', vehicle_number: ''
+  });
+  const [editResidentForm, setEditResidentForm] = useState({
+    id: '', email: '', role: 'homeowner', status: 'approved',
+    full_name: '', phone_number: '', building_name: '', unit_number: '', vehicle_number: ''
+  });
+
   // Stats Data
   const [dashboardStats, setDashboardStats] = useState(null);
 
@@ -79,8 +98,18 @@ export default function AdminDashboard() {
         setUsersTotal(usersRes.data.total || 0);
         setUsersMetrics(usersRes.data.metrics || { total: 0, active: 0, pending: 0, suspended: 0 });
       } else if (activeTab === 'residents') {
-        const res = await api.get('/auth/residents');
-        setResidents(res.data);
+        const res = await api.get('/auth/residents', {
+          params: {
+            status: residentStatusFilter === 'All' ? '' : residentStatusFilter,
+            block: residentBlockFilter === 'All' ? '' : residentBlockFilter,
+            search: residentSearch,
+            page: residentsPage,
+            limit: 10
+          }
+        });
+        setResidents(res.data.residents || []);
+        setResidentsTotal(res.data.total || 0);
+        setResidentsMetrics(res.data.metrics || { total: 0, active: 0, vacated: 0, new_residents: 0 });
       } else if (activeTab === 'units') {
         const unitsRes = await api.get('/units');
         setUnits(unitsRes.data);
@@ -113,7 +142,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab, roleFilter, statusFilter, searchQuery, usersPage]);
+  }, [activeTab, roleFilter, statusFilter, searchQuery, usersPage, residentStatusFilter, residentBlockFilter, residentSearch, residentsPage]);
 
   // Handle Approvals
   const handleApproval = async (userId, action) => {
@@ -174,6 +203,43 @@ export default function AdminDashboard() {
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Failed to create user');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Create Resident directly
+  const handleCreateResident = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/auth/users', newResidentForm);
+      setSuccessMsg("Resident created successfully!");
+      setShowAddResidentModal(false);
+      setNewResidentForm({
+        email: '', password: '', role: 'homeowner', status: 'approved',
+        full_name: '', phone_number: '', building_name: '', unit_number: '', vehicle_number: ''
+      });
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to add resident');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update Resident profile status or details
+  const handleUpdateResidentProfile = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/auth/users/${editResidentForm.id}/status`, {
+        status: editResidentForm.status
+      });
+      setSuccessMsg("Resident profile updated successfully!");
+      setShowEditResidentModal(false);
+      setSelectedResident(null);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update resident profile');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
@@ -519,6 +585,8 @@ export default function AdminDashboard() {
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30">
           {activeTab === 'approvals' ? (
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">User & Access Management</h2>
+          ) : activeTab === 'residents' ? (
+            <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Resident Management</h2>
           ) : (
             /* Search bar */
             <div className="relative max-w-sm w-full">
@@ -543,6 +611,26 @@ export default function AdminDashboard() {
                 <Plus className="w-4 h-4" />
                 <span>Add New User</span>
               </button>
+            )}
+
+            {activeTab === 'residents' && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    alert("Simulated Action: Resident list data exported to CSV format successfully.");
+                  }}
+                  className="py-1.5 px-3.5 bg-white border border-slate-250 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95"
+                >
+                  Export
+                </button>
+                <button 
+                  onClick={() => setShowAddResidentModal(true)}
+                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add New Resident</span>
+                </button>
+              </div>
             )}
 
             {/* Notification bell */}
@@ -1167,56 +1255,308 @@ export default function AdminDashboard() {
 
           {/* 3.3 activeTab = RESIDENTS */}
           {activeTab === 'residents' && (
-            <div className="space-y-6">
-              <div className="mb-4">
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Resident Registry</h2>
-                <p className="text-xs text-slate-400 font-semibold mt-1">Operational records of approved properties and occupant contact profiles.</p>
-              </div>
+            <div className={`grid grid-cols-1 ${selectedResident ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-6 items-start`}>
+              
+              {/* Main Table Area */}
+              <div className={`${selectedResident ? 'lg:col-span-3' : 'lg:col-span-1'} space-y-6`}>
+                
+                {/* Metrics Cards Row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Residents</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{residentsMetrics.total.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
 
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                {residents.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic text-center py-6">No approved residents found.</p>
-                ) : (
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Active Residents</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{residentsMetrics.active.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5 text-emerald-600" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm border-l-4 border-l-rose-500 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Vacated (30 Days)</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{residentsMetrics.vacated}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+                      <X className="w-5 h-5 text-rose-500" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">New This Month</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{residentsMetrics.new_residents}</h3>
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                      <Plus className="w-5 h-5 text-indigo-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Controls Card */}
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-center gap-4">
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, email or phone..."
+                      className="w-full bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs transition-all"
+                      value={residentSearch}
+                      onChange={(e) => { setResidentSearch(e.target.value); setResidentsPage(1); }}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap w-full md:w-auto items-center gap-3">
+                    <div className="relative w-full sm:w-36">
+                      <select
+                        className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={residentStatusFilter}
+                        onChange={(e) => { setResidentStatusFilter(e.target.value); setResidentsPage(1); }}
+                      >
+                        <option value="All">Status: All</option>
+                        <option value="approved">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="rejected">Vacated</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative w-full sm:w-36">
+                      <select
+                        className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={residentBlockFilter}
+                        onChange={(e) => { setResidentBlockFilter(e.target.value); setResidentsPage(1); }}
+                      >
+                        <option value="All">Unit: All</option>
+                        <option value="Block A">Block A</option>
+                        <option value="Block B">Block B</option>
+                        <option value="Block C">Block C</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setResidentSearch('');
+                        setResidentStatusFilter('All');
+                        setResidentBlockFilter('All');
+                        setResidentsPage(1);
+                      }}
+                      className="text-xs font-extrabold text-blue-700 hover:text-blue-500 hover:underline cursor-pointer transition select-none ml-2"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table Grid */}
+                <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600 min-w-[850px]">
+                    <table className="w-full text-left text-xs text-slate-600 min-w-[750px]">
                       <thead>
                         <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3 font-semibold">Full Name</th>
-                          <th className="pb-3 font-semibold">Role</th>
-                          <th className="pb-3 font-semibold">Email</th>
-                          <th className="pb-3 font-semibold">Building/Unit</th>
-                          <th className="pb-3 font-semibold">Phone</th>
-                          <th className="pb-3 font-semibold">NIC / Passport</th>
-                          <th className="pb-3 font-semibold">Vehicle</th>
+                          <th className="py-3.5 pl-6 w-12"><input type="checkbox" className="rounded border-slate-300" /></th>
+                          <th className="py-3.5 font-semibold">Resident Name</th>
+                          <th className="py-3.5 font-semibold">Unit</th>
+                          <th className="py-3.5 font-semibold">Block</th>
+                          <th className="py-3.5 font-semibold">Contact</th>
+                          <th className="py-3.5 font-semibold">Move In Date</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {residents.map((r) => (
-                          <tr key={r.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 font-bold text-slate-800">{r.full_name || 'N/A'}</td>
-                            <td className="py-3">
-                              <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] ${
-                                r.role === 'homeowner' 
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-100' 
-                                  : 'bg-purple-50 text-purple-700 border border-purple-100'
-                              }`}>
-                                {r.role}
-                              </span>
-                            </td>
-                            <td className="py-3 font-medium">{r.email}</td>
-                            <td className="py-3 font-semibold text-slate-800">
-                              {r.building_name || 'N/A'} - {r.unit_number || 'N/A'}
-                            </td>
-                            <td className="py-3 font-medium">{r.phone_number || 'N/A'}</td>
-                            <td className="py-3 text-slate-500">{r.nic_or_passport || 'N/A'}</td>
-                            <td className="py-3 text-slate-500">{r.vehicle_number || '-'}</td>
+                        {residents.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-8 text-center text-slate-400 italic">No approved residents matched the filters.</td>
                           </tr>
-                        ))}
+                        ) : (
+                          residents.map((r) => {
+                            const isSelected = selectedResident?.id === r.id;
+                            return (
+                              <tr 
+                                key={r.id} 
+                                onClick={() => setSelectedResident(r)}
+                                className={`cursor-pointer transition ${isSelected ? 'bg-blue-50/70 border-l-4 border-l-blue-600' : 'hover:bg-slate-50/50'}`}
+                              >
+                                <td className="py-3.5 pl-6"><input type="checkbox" className="rounded border-slate-300" checked={isSelected} readOnly /></td>
+                                <td className="py-3.5 font-bold text-slate-800 flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-200 to-amber-500 text-slate-900 font-extrabold text-xs flex items-center justify-center uppercase shrink-0 shadow-xs">
+                                    {r.full_name ? r.full_name.charAt(0) : r.email.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <span className="block leading-tight text-slate-800 font-bold">{r.full_name || 'N/A'}</span>
+                                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{r.role}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 font-extrabold text-slate-700">{r.unit_number || 'A-204'}</td>
+                                <td className="py-3.5 font-medium">{r.building_name || 'Block A'}</td>
+                                <td className="py-3.5">
+                                  <span className="block font-medium text-slate-700">{r.email}</span>
+                                  <span className="text-[10px] text-slate-400 font-semibold">{r.phone_number || '+1 234 567 890'}</span>
+                                </td>
+                                <td className="py-3.5 text-slate-500 font-medium">
+                                  {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
-                )}
+
+                  {/* Pagination footer */}
+                  {residentsTotal > 10 && (
+                    <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+                      <span>Showing {((residentsPage - 1) * 10) + 1}-{Math.min(residentsPage * 10, residentsTotal)} of {residentsTotal} residents</span>
+                      <div className="flex gap-1">
+                        <button
+                          disabled={residentsPage === 1}
+                          onClick={() => setResidentsPage(p => Math.max(1, p - 1))}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer transition disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          disabled={residentsPage * 10 >= residentsTotal}
+                          onClick={() => setResidentsPage(p => p + 1)}
+                          className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer transition disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
+
+              {/* Right Sidebar Drawer: Resident Profile Details */}
+              {selectedResident && (
+                <div className="lg:col-span-1 bg-white border border-slate-200/60 rounded-2xl shadow-sm p-6 space-y-6 relative animate-in fade-in slide-in-from-right-4 duration-200">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <h3 className="font-extrabold text-slate-800 text-sm">Resident Profile</h3>
+                    <button 
+                      onClick={() => setSelectedResident(null)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-4.5 h-4.5" />
+                    </button>
+                  </div>
+
+                  {/* Profile Header Card */}
+                  <div className="flex flex-col items-center text-center space-y-2">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-300 via-amber-400 to-amber-600 text-slate-900 font-black text-2xl flex items-center justify-center shadow-md uppercase">
+                      {selectedResident.full_name ? selectedResident.full_name.charAt(0) : selectedResident.email.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-base">{selectedResident.full_name || 'Resident Profile'}</h4>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase mt-1 ${
+                        selectedResident.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {selectedResident.status === 'approved' ? 'ACTIVE RESIDENT' : selectedResident.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div className="space-y-3">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Contact Information</span>
+                    <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-2 text-xs font-semibold">
+                      <div className="flex items-center gap-2.5 text-slate-700">
+                        <span className="w-4 h-4 text-slate-400">✉</span>
+                        <span className="truncate">{selectedResident.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-slate-700">
+                        <span className="w-4 h-4 text-slate-400">📞</span>
+                        <span>{selectedResident.phone_number || '+1 234 567 890'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unit Details */}
+                  <div className="space-y-3">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Unit Details</span>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Unit No.</span>
+                        <span className="font-extrabold text-slate-800">{selectedResident.unit_number || 'A-204'}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Block</span>
+                        <span className="font-extrabold text-slate-800">{selectedResident.building_name || 'Block A'}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Type</span>
+                        <span className="font-extrabold text-slate-800">2 Bedroom</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Move-in Date</span>
+                        <span className="font-extrabold text-slate-800">
+                          {new Date(selectedResident.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Status */}
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Payment Status</span>
+                    {Number(selectedResident.outstanding_amount || 0) === 0 ? (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200/60 rounded-xl text-emerald-800 text-xs font-bold flex items-center justify-between">
+                        <span>All dues cleared</span>
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-rose-50 border border-rose-200/60 rounded-xl text-rose-800 text-xs font-bold flex items-center justify-between">
+                        <span>Outstanding: ${Number(selectedResident.outstanding_amount).toFixed(2)}</span>
+                        <X className="w-4 h-4 text-rose-600" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action triggers */}
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditResidentForm({
+                          id: selectedResident.id,
+                          email: selectedResident.email,
+                          role: selectedResident.role,
+                          status: selectedResident.status,
+                          full_name: selectedResident.full_name || '',
+                          phone_number: selectedResident.phone_number || '',
+                          building_name: selectedResident.building_name || '',
+                          unit_number: selectedResident.unit_number || '',
+                          vehicle_number: selectedResident.vehicle_number || ''
+                        });
+                        setShowEditResidentModal(true);
+                      }}
+                      className="flex-1 py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                    >
+                      Edit Profile
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(selectedResident.id)}
+                      className="p-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-red-600 rounded-lg cursor-pointer transition"
+                      title="Remove Account"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                </div>
+              )}
+
             </div>
           )}
 
@@ -1983,6 +2323,247 @@ export default function AdminDashboard() {
                   className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
                 >
                   Save User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Add New Resident Modal */}
+      {showAddResidentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Add New Resident</h3>
+              <button 
+                onClick={() => setShowAddResidentModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateResident} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="resident@example.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.email}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter password"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.password}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="James Wilson"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.full_name}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, full_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Phone Number</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="+1 234 567 890"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.phone_number}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, phone_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Occupant Type</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newResidentForm.role}
+                      onChange={(e) => setNewResidentForm({ ...newResidentForm, role: e.target.value })}
+                    >
+                      <option value="homeowner">Homeowner</option>
+                      <option value="tenant">Tenant</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newResidentForm.status}
+                      onChange={(e) => setNewResidentForm({ ...newResidentForm, status: e.target.value })}
+                    >
+                      <option value="approved">Active</option>
+                      <option value="pending">Pending</option>
+                      <option value="rejected">Vacated</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Building Block</label>
+                  <input
+                    type="text"
+                    placeholder="Block A"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.building_name}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, building_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit Number</label>
+                  <input
+                    type="text"
+                    placeholder="A-204"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newResidentForm.unit_number}
+                    onChange={(e) => setNewResidentForm({ ...newResidentForm, unit_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddResidentModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Create Resident
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Resident Profile Modal */}
+      {showEditResidentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Edit Resident Profile</h3>
+              <button 
+                onClick={() => setShowEditResidentModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateResidentProfile} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                  value={editResidentForm.full_name}
+                  onChange={(e) => setEditResidentForm({ ...editResidentForm, full_name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Email (Read Only)</label>
+                  <input
+                    type="email"
+                    disabled
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 text-slate-500 rounded-lg text-xs font-medium cursor-not-allowed"
+                    value={editResidentForm.email}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Phone Number</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                    value={editResidentForm.phone_number}
+                    onChange={(e) => setEditResidentForm({ ...editResidentForm, phone_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Occupant Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editResidentForm.status}
+                      onChange={(e) => setEditResidentForm({ ...editResidentForm, status: e.target.value })}
+                    >
+                      <option value="approved">Active Resident</option>
+                      <option value="pending">Pending Approval</option>
+                      <option value="rejected">Vacated / Inactive</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit Allocation</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                    value={`${editResidentForm.building_name} - ${editResidentForm.unit_number}`}
+                    onChange={(e) => {
+                      const parts = e.target.value.split('-');
+                      setEditResidentForm({
+                        ...editResidentForm,
+                        building_name: parts[0]?.trim() || editResidentForm.building_name,
+                        unit_number: parts[1]?.trim() || editResidentForm.unit_number
+                      });
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditResidentModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

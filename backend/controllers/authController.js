@@ -446,19 +446,87 @@ const getAdminDashboardStats = async (req, res) => {
   }
 };
 
-// @desc    Get all approved residents (homeowners and tenants)
+// @desc    Get residents with filters, pagination, and payment clearances
 // @route   GET /api/auth/residents
 // @access  Private (Admin / Staff)
 const getApprovedResidents = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin' && requesterRole !== 'staff') {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
   try {
-    const [residents] = await pool.query(
-      `SELECT id, email, role, status, created_at,
-              full_name, nic_or_passport, phone_number, building_name, unit_number, vehicle_number
-       FROM users 
-       WHERE role IN ('homeowner', 'tenant') AND status = 'approved'
-       ORDER BY created_at DESC`
-    );
-    return res.status(200).json(residents);
+    const { status, block, search, page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let conditions = ['role IN ("homeowner", "tenant")'];
+    let params = [];
+
+    if (status && status !== 'All' && status !== '') {
+      conditions.push('status = ?');
+      params.push(status.toLowerCase());
+    }
+
+    if (block && block !== 'All' && block !== '') {
+      conditions.push('building_name = ?');
+      params.push(block);
+    }
+
+    if (search && search.trim() !== '') {
+      conditions.push('(full_name LIKE ? OR email LIKE ? OR phone_number LIKE ?)');
+      const searchPattern = `%${search.trim()}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Calculate total matches for pagination
+    const countQuery = `SELECT COUNT(*) AS count FROM users ${whereClause}`;
+    const [countRes] = await pool.query(countQuery, params);
+    const totalMatch = countRes[0]?.count || 0;
+
+    // Fetch residents along with dynamic calculation of their unpaid bills sum
+    const selectQuery = `
+      SELECT 
+        u.id, u.email, u.role, u.status, u.created_at,
+        u.full_name, u.nic_or_passport, u.phone_number, u.building_name, u.unit_number, u.vehicle_number,
+        COALESCE(
+          (SELECT SUM(b.amount) 
+           FROM bills b 
+           JOIN units un ON b.unit_id = un.id 
+           WHERE (un.owner_id = u.id OR un.tenant_id = u.id) AND b.status = 'unpaid'),
+          0
+        ) AS outstanding_amount
+      FROM users u
+      ${whereClause}
+      ORDER BY u.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    const [residents] = await pool.query(selectQuery, [...params, parseInt(limit), parseInt(offset)]);
+
+    // Calculate metrics for summary cards
+    const [metricsRes] = await pool.query(`
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS active,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS vacated,
+        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS new_residents
+      FROM users
+      WHERE role IN ('homeowner', 'tenant')
+    `);
+
+    const summaryMetrics = {
+      total: metricsRes[0]?.total || 0,
+      active: metricsRes[0]?.active || 0,
+      vacated: metricsRes[0]?.vacated || 0,
+      new_residents: metricsRes[0]?.new_residents || 0
+    };
+
+    return res.status(200).json({
+      residents,
+      total: totalMatch,
+      metrics: summaryMetrics
+    });
   } catch (error) {
     console.error('Get residents error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
