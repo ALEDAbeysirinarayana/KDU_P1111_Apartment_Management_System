@@ -87,6 +87,17 @@ export default function AdminDashboard() {
   const [units, setUnits] = useState([]);
   const [parkingSlots, setParkingSlots] = useState([]);
   const [bills, setBills] = useState([]);
+  const [billsTotal, setBillsTotal] = useState(0);
+  const [billsPage, setBillsPage] = useState(1);
+  const [billMetrics, setBillMetrics] = useState({ totalInvoices: 1250, paymentsCollected: 45200, pendingAmount: 8400, pendingCount: 42, overdueAmount: 2150, overdueCount: 12 });
+  const [billMonthlyData, setBillMonthlyData] = useState([]);
+  const [overdueList, setOverdueList] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [billSearchQuery, setBillSearchQuery] = useState('');
+  const [billStatusFilter, setBillStatusFilter] = useState('All');
+  const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState(false);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [recordPaymentForm, setRecordPaymentForm] = useState({ billId: '', payment_method: 'Bank Transfer', notes: '' });
   const [notices, setNotices] = useState([]);
   const [noticeMetrics, setNoticeMetrics] = useState({ totalNotices: 1248, activeNotices: 42, scheduledNotices: 12, archivedNotices: 1194 });
   const [noticeDistribution, setNoticeDistribution] = useState({ utility: 45, events: 30, security: 15, other: 10 });
@@ -231,10 +242,22 @@ export default function AdminDashboard() {
         setNoticeDistribution(noticesRes.data.distribution || { utility: 45, events: 30, security: 15, other: 10 });
         setNoticeActivities(noticesRes.data.activities || []);
       } else if (activeTab === 'bills') {
-        const billsRes = await api.get('/bills');
-        setBills(billsRes.data);
+        const billsRes = await api.get('/bills', {
+          params: {
+            search: billSearchQuery,
+            status: billStatusFilter === 'All' ? '' : billStatusFilter.toLowerCase(),
+            page: billsPage,
+            limit: 10
+          }
+        });
+        setBills(billsRes.data.bills || []);
+        setBillsTotal(billsRes.data.total || 0);
+        setBillMetrics(billsRes.data.metrics || billMetrics);
+        setBillMonthlyData(billsRes.data.monthlyCollection || []);
+        setOverdueList(billsRes.data.overdueList || []);
+        setTransactions(billsRes.data.transactions || []);
         const unitsRes = await api.get('/units');
-        setUnits(unitsRes.data);
+        setUnits(unitsRes.data.units || unitsRes.data || []);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -252,7 +275,8 @@ export default function AdminDashboard() {
     unitBlockFilter, unitFloorFilter, unitStatusFilter, unitTypeFilter, unitSearchQuery,
     complaintStatusFilter, complaintCategoryFilter, complaintPriorityFilter, complaintBlockFilter, complaintSearchQuery, complaintsPage,
     eventSearchQuery,
-    noticeSearchQuery, noticeStatusFilter, noticeCategoryFilter, noticePriorityFilter
+    noticeSearchQuery, noticeStatusFilter, noticeCategoryFilter, noticePriorityFilter,
+    billSearchQuery, billStatusFilter, billsPage
   ]);
 
   // Handle Approvals
@@ -392,19 +416,57 @@ export default function AdminDashboard() {
     }
   };
 
-  // Issue Bill
+  // Issue Bill (Generate Invoice)
   const handleCreateBill = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/bills', newBill);
+      const form = showGenerateInvoiceModal
+        ? newBill
+        : newBill;
+      await api.post('/bills', form);
       setSuccessMsg('Invoice generated successfully!');
-      setNewBill({ unit_id: '', amount: '', description: '', due_date: '' });
+      setNewBill({ unit_id: '', amount: '', description: '', due_date: '', payment_method: 'Bank Transfer' });
+      setShowGenerateInvoiceModal(false);
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Invoice generation failed');
       setTimeout(() => setErrorMsg(''), 4000);
     }
+  };
+
+  // Mark bill paid/unpaid
+  const handleUpdateBillStatus = async (billId, status, paymentMethod = 'Bank Transfer') => {
+    try {
+      await api.put(`/bills/${billId}/status`, { status, payment_method: paymentMethod });
+      setSuccessMsg(`Invoice marked as ${status}.`);
+      fetchData();
+      setShowRecordPaymentModal(false);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Status update failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Delete a bill
+  const handleDeleteBill = async (billId) => {
+    if (!window.confirm('Are you sure you want to delete this invoice? This cannot be undone.')) return;
+    try {
+      await api.delete(`/bills/${billId}`);
+      setSuccessMsg('Invoice deleted.');
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Delete failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Record a payment form submit
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    await handleUpdateBillStatus(recordPaymentForm.billId, 'paid', recordPaymentForm.payment_method);
   };
 
   // Parking reservation approvals
@@ -3729,119 +3791,414 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* 3.8 activeTab = BILLS (Payments & Invoice) */}
+          {/* 3.8 activeTab = BILLS (Payments & Billing) */}
           {activeTab === 'bills' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Invoice creation form */}
-              <div className="lg:col-span-1 bg-white border border-[#eaeaea] p-6 rounded-2xl shadow-sm h-fit">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Issue New Invoice</h3>
-                <form onSubmit={handleCreateBill} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Unit</label>
-                    <div className="relative">
-                      <select
-                        required
-                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                        value={newBill.unit_id}
-                        onChange={(e) => setNewBill({ ...newBill, unit_id: e.target.value })}
-                      >
-                        <option value="">-- Choose Unit --</option>
-                        {units.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.block_name} - Floor {u.floor_number} - Unit {u.unit_number}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Amount ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="120.00"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                      value={newBill.amount}
-                      onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Maintenance Fees / Utility"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                      value={newBill.description}
-                      onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Due Date</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg transition-all text-xs font-medium"
-                      value={newBill.due_date}
-                      onChange={(e) => setNewBill({ ...newBill, due_date: e.target.value })}
-                    />
-                  </div>
+            <div className="space-y-6 animate-in fade-in duration-200">
+
+              {/* Page Header with Actions */}
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-800">Payments & Billing</h2>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Manage invoices and track resident payments.</p>
+                </div>
+                <div className="flex items-center gap-2">
                   <button
-                    type="submit"
-                    className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                    onClick={() => setShowRecordPaymentModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
                   >
-                    Generate Bill
+                    <CreditCard className="w-3.5 h-3.5" /> Record Payment
                   </button>
-                </form>
+                  <button
+                    onClick={() => setShowGenerateInvoiceModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Generate Invoice
+                  </button>
+                </div>
               </div>
 
-              {/* Invoicing list */}
-              <div className="lg:col-span-2 bg-white border border-[#eaeaea] p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Invoicing History</h3>
-                {bills.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No invoices issued yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Unit</th>
-                          <th className="pb-3">Description</th>
-                          <th className="pb-3">Amount</th>
-                          <th className="pb-3">Due Date</th>
-                          <th className="pb-3">Status</th>
+              {/* Metrics Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Invoices</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">{billMetrics.totalInvoices.toLocaleString()}</h3>
+                      <p className="text-[9px] text-emerald-600 font-bold mt-1">+12% from last month</p>
+                    </div>
+                    <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Payments Collected</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">${(billMetrics.paymentsCollected || 0).toLocaleString()}</h3>
+                      <p className="text-[9px] text-slate-400 font-bold mt-1">Current month</p>
+                    </div>
+                    <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Payments</span>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">${(billMetrics.pendingAmount || 0).toLocaleString()}</h3>
+                      <p className="text-[9px] text-amber-600 font-bold mt-1">{billMetrics.pendingCount} invoices pending</p>
+                    </div>
+                    <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-amber-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Overdue Payments</span>
+                      <h3 className="text-2xl font-black text-red-600 mt-1">${(billMetrics.overdueAmount || 0).toLocaleString()}</h3>
+                      <p className="text-[9px] text-red-500 font-bold mt-1">{billMetrics.overdueCount} invoices critical</p>
+                    </div>
+                    <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center">
+                      <ShieldAlert className="w-4 h-4 text-red-500" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Management Table */}
+              <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex justify-between items-center p-5 border-b border-slate-100">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Invoice Management</h3>
+                  <div className="flex items-center gap-2">
+                    {/* Search */}
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 w-3 h-3 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search invoices, units, or residents..."
+                        className="pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-medium text-slate-700 w-52 focus:outline-none focus:border-blue-400"
+                        value={billSearchQuery}
+                        onChange={(e) => { setBillSearchQuery(e.target.value); setBillsPage(1); }}
+                      />
+                    </div>
+                    {/* Status Filter */}
+                    <div className="relative">
+                      <select
+                        className="pl-2.5 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 appearance-none cursor-pointer focus:outline-none focus:border-blue-400"
+                        value={billStatusFilter}
+                        onChange={(e) => { setBillStatusFilter(e.target.value); setBillsPage(1); }}
+                      >
+                        <option>All</option>
+                        <option>Paid</option>
+                        <option>Unpaid</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2.5 w-3 h-3 text-slate-400 pointer-events-none" />
+                    </div>
+                    {/* Export */}
+                    <button
+                      onClick={() => {
+                        const rows = [['Invoice ID','Unit','Resident','Amount','Invoice Date','Due Date','Status']];
+                        bills.forEach(b => rows.push([b.invoice_id, `${b.block_name}-${b.unit_number}`, b.resident_name, b.amount, b.created_at?.slice(0,10), b.due_date, b.status]));
+                        const csv = rows.map(r => r.join(',')).join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'invoices.csv'; a.click();
+                      }}
+                      className="p-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg cursor-pointer transition"
+                      title="Export CSV"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="px-5 py-3">Invoice ID</th>
+                        <th className="px-5 py-3">Unit</th>
+                        <th className="px-5 py-3">Resident Name</th>
+                        <th className="px-5 py-3">Amount</th>
+                        <th className="px-5 py-3">Invoice Date</th>
+                        <th className="px-5 py-3">Due Date</th>
+                        <th className="px-5 py-3">Status</th>
+                        <th className="px-5 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {bills.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-5 py-10 text-center text-slate-400 text-xs italic">
+                            No invoices found. Generate one using the button above.
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {bills.map((bill) => (
-                          <tr key={bill.id} className="hover:bg-slate-50/50">
-                            <td className="py-3.5 font-bold text-slate-800">
-                              {bill.block_name} - F{bill.floor_number} - Unit {bill.unit_number}
+                      ) : (
+                        bills.map((bill) => {
+                          const isOverdue = bill.status === 'unpaid' && new Date(bill.due_date) < new Date();
+                          return (
+                            <tr key={bill.id} className="hover:bg-slate-50/60 transition">
+                              <td className="px-5 py-3.5">
+                                <span className="text-blue-700 font-extrabold cursor-pointer hover:underline text-[10px]">
+                                  #{bill.invoice_id || `INV-${String(bill.id).padStart(4,'0')}`}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 font-bold text-slate-700 text-[10px]">
+                                {bill.block_name}-{bill.unit_number}
+                              </td>
+                              <td className="px-5 py-3.5 font-medium text-slate-600 text-[10px]">
+                                {bill.resident_name || 'N/A'}
+                              </td>
+                              <td className="px-5 py-3.5 font-extrabold text-slate-800 text-[10px]">
+                                ${parseFloat(bill.amount).toFixed(2)}
+                              </td>
+                              <td className="px-5 py-3.5 text-slate-400 font-semibold text-[10px]">
+                                {bill.created_at ? new Date(bill.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                              </td>
+                              <td className="px-5 py-3.5 text-slate-400 font-semibold text-[10px]">
+                                {new Date(bill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
+                                  bill.status === 'paid'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : isOverdue
+                                    ? 'bg-red-50 text-red-600 border-red-100'
+                                    : 'bg-amber-50 text-amber-700 border-amber-100'
+                                }`}>
+                                  {bill.status === 'paid' ? 'PAID' : isOverdue ? 'OVERDUE' : 'PENDING'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => alert(`Invoice: #${bill.invoice_id || bill.id}\nUnit: ${bill.block_name}-${bill.unit_number}\nResident: ${bill.resident_name || 'N/A'}\nAmount: $${bill.amount}\nDescription: ${bill.description}\nDue: ${new Date(bill.due_date).toLocaleDateString()}\nStatus: ${bill.status.toUpperCase()}`)}
+                                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer transition"
+                                    title="View"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                  </button>
+                                  {bill.status === 'unpaid' ? (
+                                    <button
+                                      onClick={() => { setRecordPaymentForm({ billId: bill.id, payment_method: 'Bank Transfer', notes: '' }); setShowRecordPaymentModal(true); }}
+                                      className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 cursor-pointer transition"
+                                      title="Mark Paid"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleUpdateBillStatus(bill.id, 'unpaid')}
+                                      className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 cursor-pointer transition"
+                                      title="Mark Unpaid"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteBill(bill.id)}
+                                    className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 cursor-pointer transition"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="flex justify-between items-center px-5 py-3.5 border-t border-slate-100">
+                  <span className="text-[9px] text-slate-400 font-bold">
+                    Showing {((billsPage - 1) * 10) + 1}–{Math.min(billsPage * 10, billsTotal)} of {billsTotal.toLocaleString()} invoices
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setBillsPage(p => Math.max(1, p - 1))}
+                      disabled={billsPage === 1}
+                      className="px-3 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+                    >Previous</button>
+                    <button
+                      onClick={() => setBillsPage(p => p + 1)}
+                      disabled={billsPage * 10 >= billsTotal}
+                      className="px-3 py-1.5 bg-[#133fbd] text-white rounded-lg text-[10px] font-bold hover:bg-[#0f3299] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+                    >Next</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Section: Monthly Chart + Overdue Panel */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* Monthly Payment Collection Chart */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Monthly Payment Collection</h3>
+                      <p className="text-[9px] text-slate-400 font-bold mt-0.5">Revenue trends for the past 6 months</p>
+                    </div>
+                    <span className="text-[9px] font-extrabold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
+                      {new Date().getFullYear()}
+                    </span>
+                  </div>
+
+                  {/* Simple bar chart */}
+                  {billMonthlyData.length === 0 ? (
+                    <div className="h-28 flex items-center justify-center">
+                      <p className="text-xs text-slate-300 italic">No payment collection data yet.</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-end gap-3 h-28">
+                      {billMonthlyData.map((item, i) => {
+                        const maxVal = Math.max(...billMonthlyData.map(d => parseFloat(d.collected || 0)), 1);
+                        const heightPct = (parseFloat(item.collected || 0) / maxVal) * 100;
+                        const isLast = i === billMonthlyData.length - 1;
+                        return (
+                          <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                            <span className="text-[8px] text-slate-400 font-bold">${Math.round(item.collected/1000)}k</span>
+                            <div
+                              className={`w-full rounded-t-md transition-all ${isLast ? 'bg-blue-600' : 'bg-slate-200'}`}
+                              style={{ height: `${Math.max(heightPct, 4)}%` }}
+                              title={`${item.month}: $${parseFloat(item.collected).toLocaleString()}`}
+                            />
+                            <span className={`text-[8px] font-extrabold uppercase ${isLast ? 'text-blue-600' : 'text-slate-400'}`}>{item.month}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Overdue Payments Panel */}
+                <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Overdue Payments</h3>
+                    <button
+                      onClick={() => { setBillStatusFilter('Unpaid'); setBillsPage(1); }}
+                      className="text-[9px] font-bold text-blue-700 hover:underline cursor-pointer"
+                    >
+                      View All
+                    </button>
+                  </div>
+                  {overdueList.length === 0 ? (
+                    <p className="text-xs text-slate-300 italic text-center py-6">No overdue invoices 🎉</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {overdueList.slice(0, 4).map((o) => {
+                        const initials = (o.resident_name || 'R').split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+                        const colors = ['bg-amber-100 text-amber-700', 'bg-blue-100 text-blue-700', 'bg-red-100 text-red-700', 'bg-purple-100 text-purple-700'];
+                        const colorClass = colors[o.id % colors.length];
+                        return (
+                          <div key={o.id} className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[9px] font-extrabold shrink-0 ${colorClass}`}>
+                              {initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-bold text-slate-700 truncate">
+                                {o.block_name}-{o.unit_number} ({o.resident_name})
+                              </p>
+                              <p className="text-[8px] text-red-500 font-bold">{o.days_overdue} days overdue</p>
+                            </div>
+                            <span className="text-[10px] font-extrabold text-slate-800">${parseFloat(o.amount).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      const emails = overdueList.map(o => o.resident_name).join(', ');
+                      alert(`Send Bulk Reminders\n\nWould notify ${overdueList.length} residents:\n${emails || 'None'}`);
+                    }}
+                    className="mt-4 w-full py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer transition"
+                  >
+                    Send Bulk Reminders
+                  </button>
+                </div>
+              </div>
+
+              {/* Recent Payment Transactions */}
+              <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                <div className="flex justify-between items-center p-5 border-b border-slate-100">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent Payment Transactions</h3>
+                  <button className="flex items-center gap-1 text-[9px] font-bold text-blue-700 hover:underline cursor-pointer">
+                    <Clock className="w-3 h-3" /> Full History
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                        <th className="px-5 py-3">Transaction ID</th>
+                        <th className="px-5 py-3">Invoice ID</th>
+                        <th className="px-5 py-3">Resident</th>
+                        <th className="px-5 py-3">Unit</th>
+                        <th className="px-5 py-3">Amount</th>
+                        <th className="px-5 py-3">Method</th>
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {transactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-5 py-8 text-center text-slate-300 text-xs italic">
+                            No transactions recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        transactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/60 transition">
+                            <td className="px-5 py-3.5 text-[10px]">
+                              <span className="text-slate-500 font-extrabold">#{tx.transaction_id}</span>
                             </td>
-                            <td className="py-3.5 font-medium">{bill.description}</td>
-                            <td className="py-3.5 text-slate-800 font-extrabold">${bill.amount}</td>
-                            <td className="py-3.5 text-slate-400 font-semibold">
-                              {new Date(bill.due_date).toLocaleDateString()}
+                            <td className="px-5 py-3.5 text-[10px]">
+                              <span className="text-blue-700 font-extrabold">#{tx.invoice_id}</span>
                             </td>
-                            <td className="py-3.5">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                bill.status === 'paid'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-100'
+                            <td className="px-5 py-3.5 font-medium text-slate-700 text-[10px]">{tx.resident_name}</td>
+                            <td className="px-5 py-3.5 font-medium text-slate-600 text-[10px]">{tx.block_name}-{tx.unit_number}</td>
+                            <td className="px-5 py-3.5 font-extrabold text-slate-800 text-[10px]">${parseFloat(tx.amount).toFixed(2)}</td>
+                            <td className="px-5 py-3.5 text-[10px]">
+                              <div className="flex items-center gap-1 text-slate-500 font-semibold">
+                                <CreditCard className="w-3 h-3" /> {tx.method}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5 text-slate-400 font-semibold text-[10px]">
+                              {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{' '}
+                              <span className="text-slate-300">{new Date(tx.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
+                                tx.status === 'successful'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : tx.status === 'pending'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                  : 'bg-red-50 text-red-600 border-red-100'
                               }`}>
-                                {bill.status}
+                                {tx.status}
                               </span>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
             </div>
           )}
 
@@ -5304,6 +5661,171 @@ export default function AdminDashboard() {
                 >
                   Save Changes
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Generate Invoice Modal */}
+      {showGenerateInvoiceModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Generate Invoice</h3>
+              <button onClick={() => setShowGenerateInvoiceModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBill} className="space-y-4 font-sans text-xs">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Unit</label>
+                <div className="relative">
+                  <select
+                    required
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={newBill.unit_id}
+                    onChange={(e) => setNewBill({ ...newBill, unit_id: e.target.value })}
+                  >
+                    <option value="">-- Select Unit --</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.block_name} – Floor {u.floor_number} – Unit {u.unit_number}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Amount ($)</label>
+                  <input
+                    type="number" step="0.01" required placeholder="0.00"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
+                    value={newBill.amount}
+                    onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Due Date</label>
+                  <input
+                    type="date" required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                    value={newBill.due_date}
+                    onChange={(e) => setNewBill({ ...newBill, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
+                <input
+                  type="text" required placeholder="e.g. Monthly Maintenance Fee"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
+                  value={newBill.description}
+                  onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Payment Method</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={newBill.payment_method}
+                    onChange={(e) => setNewBill({ ...newBill, payment_method: e.target.value })}
+                  >
+                    <option>Bank Transfer</option>
+                    <option>Online Payment</option>
+                    <option>Card</option>
+                    <option>Cash</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button type="button" onClick={() => setShowGenerateInvoiceModal(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm">Generate Invoice</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {showRecordPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Record Payment</h3>
+              <button onClick={() => setShowRecordPaymentModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordPayment} className="space-y-4 font-sans text-xs">
+              {!recordPaymentForm.billId && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Invoice</label>
+                  <div className="relative">
+                    <select
+                      required
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={recordPaymentForm.billId}
+                      onChange={(e) => setRecordPaymentForm({ ...recordPaymentForm, billId: e.target.value })}
+                    >
+                      <option value="">-- Select Invoice --</option>
+                      {bills.filter(b => b.status === 'unpaid').map((b) => (
+                        <option key={b.id} value={b.id}>
+                          #{b.invoice_id || b.id} – {b.block_name}-{b.unit_number} – ${b.amount}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              {recordPaymentForm.billId && (
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-[10px] text-blue-800 font-bold">
+                  Invoice #{bills.find(b => b.id == recordPaymentForm.billId)?.invoice_id || recordPaymentForm.billId} selected
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Payment Method</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={recordPaymentForm.payment_method}
+                    onChange={(e) => setRecordPaymentForm({ ...recordPaymentForm, payment_method: e.target.value })}
+                  >
+                    <option>Bank Transfer</option>
+                    <option>Online Payment</option>
+                    <option>Card</option>
+                    <option>Cash</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Notes (optional)</label>
+                <input
+                  type="text" placeholder="Reference number or remarks..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
+                  value={recordPaymentForm.notes}
+                  onChange={(e) => setRecordPaymentForm({ ...recordPaymentForm, notes: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button type="button" onClick={() => { setShowRecordPaymentModal(false); setRecordPaymentForm({ billId: '', payment_method: 'Bank Transfer', notes: '' }); }} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm">Record Payment</button>
               </div>
             </form>
           </div>
