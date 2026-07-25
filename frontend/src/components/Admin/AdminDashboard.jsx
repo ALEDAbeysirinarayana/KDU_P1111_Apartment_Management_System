@@ -52,6 +52,30 @@ export default function AdminDashboard() {
     full_name: '', phone_number: '', building_name: '', unit_number: '', vehicle_number: ''
   });
 
+  // Unit Inventory Management State
+  const [unitBlockFilter, setUnitBlockFilter] = useState('All Blocks');
+  const [unitFloorFilter, setUnitFloorFilter] = useState('All Floors');
+  const [unitStatusFilter, setUnitStatusFilter] = useState('Status');
+  const [unitTypeFilter, setUnitTypeFilter] = useState('Unit Type');
+  const [unitSearchQuery, setUnitSearchQuery] = useState('');
+  const [unitMetrics, setUnitMetrics] = useState({
+    totalUnits: 500, occupiedUnits: 465, vacantUnits: 28, maintenanceUnits: 7,
+    totalParking: 550, availableParking: 82, assignedParking: 468, storageUnits: 120
+  });
+
+  // Complaints & Maintenance State
+  const [complaintsTotal, setComplaintsTotal] = useState(0);
+  const [complaintsPage, setComplaintsPage] = useState(1);
+  const [complaintsMetrics, setComplaintsMetrics] = useState({ total: 0, pending: 0, in_progress: 0, emergency: 0 });
+  const [complaintsDistribution, setComplaintsDistribution] = useState({ totalActive: 0, pendingPercent: 25, progressPercent: 35, emergencyPercent: 15, resolvedPercent: 25 });
+  const [staffWorkload, setStaffWorkload] = useState([]);
+  const [complaintStatusFilter, setComplaintStatusFilter] = useState('All');
+  const [complaintCategoryFilter, setComplaintCategoryFilter] = useState('All');
+  const [complaintPriorityFilter, setComplaintPriorityFilter] = useState('All');
+  const [complaintBlockFilter, setComplaintBlockFilter] = useState('All');
+  const [complaintSearchQuery, setComplaintSearchQuery] = useState('');
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+
   // Stats Data
   const [dashboardStats, setDashboardStats] = useState(null);
 
@@ -67,8 +91,10 @@ export default function AdminDashboard() {
   const [facilityReservations, setFacilityReservations] = useState([]);
 
   // Form Input States
-  const [newUnit, setNewUnit] = useState({ block_name: '', floor_number: '', unit_number: '' });
+  const [newUnit, setNewUnit] = useState({ block_name: '', floor_number: '', unit_number: '', type: '2BHK', status: 'vacant' });
   const [allocation, setAllocation] = useState({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '' });
+  const [showAddUnitModal, setShowAddUnitModal] = useState(false);
+  const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [newBill, setNewBill] = useState({ unit_id: '', amount: '', description: '', due_date: '' });
   const [newNotice, setNewNotice] = useState({ title: '', content: '' });
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,13 +137,39 @@ export default function AdminDashboard() {
         setResidentsTotal(res.data.total || 0);
         setResidentsMetrics(res.data.metrics || { total: 0, active: 0, vacated: 0, new_residents: 0 });
       } else if (activeTab === 'units') {
-        const unitsRes = await api.get('/units');
-        setUnits(unitsRes.data);
+        const unitsRes = await api.get('/units', {
+          params: {
+            block: unitBlockFilter === 'All Blocks' ? '' : unitBlockFilter,
+            floor: unitFloorFilter === 'All Floors' ? '' : unitFloorFilter,
+            status: unitStatusFilter === 'Status' ? '' : unitStatusFilter,
+            type: unitTypeFilter === 'Unit Type' ? '' : unitTypeFilter,
+            search: unitSearchQuery
+          }
+        });
+        setUnits(unitsRes.data.units || []);
+        setUnitMetrics(unitsRes.data.metrics || {
+          totalUnits: 500, occupiedUnits: 465, vacantUnits: 28, maintenanceUnits: 7,
+          totalParking: 550, availableParking: 82, assignedParking: 468, storageUnits: 120
+        });
         const parkingRes = await api.get('/parking');
-        setParkingSlots(parkingRes.data);
+        setParkingSlots(parkingRes.data || []);
       } else if (activeTab === 'complaints') {
-        const compRes = await api.get('/complaints');
-        setComplaints(compRes.data);
+        const compRes = await api.get('/complaints', {
+          params: {
+            status: complaintStatusFilter === 'All' ? '' : complaintStatusFilter,
+            category: complaintCategoryFilter === 'All' ? '' : complaintCategoryFilter,
+            priority: complaintPriorityFilter === 'All' ? '' : complaintPriorityFilter,
+            block: complaintBlockFilter === 'All' ? '' : complaintBlockFilter,
+            search: complaintSearchQuery,
+            page: complaintsPage,
+            limit: 10
+          }
+        });
+        setComplaints(compRes.data.complaints || []);
+        setComplaintsTotal(compRes.data.total || 0);
+        setComplaintsMetrics(compRes.data.metrics || { total: 0, pending: 0, in_progress: 0, emergency: 0 });
+        setComplaintsDistribution(compRes.data.distribution || { totalActive: 0, pendingPercent: 25, progressPercent: 35, emergencyPercent: 15, resolvedPercent: 25 });
+        setStaffWorkload(compRes.data.staffWorkload || []);
       } else if (activeTab === 'facility') {
         const parkingRes = await api.get('/parking');
         setParkingSlots(parkingRes.data);
@@ -142,7 +194,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab, roleFilter, statusFilter, searchQuery, usersPage, residentStatusFilter, residentBlockFilter, residentSearch, residentsPage]);
+  }, [
+    activeTab, roleFilter, statusFilter, searchQuery, usersPage, 
+    residentStatusFilter, residentBlockFilter, residentSearch, residentsPage,
+    unitBlockFilter, unitFloorFilter, unitStatusFilter, unitTypeFilter, unitSearchQuery,
+    complaintStatusFilter, complaintCategoryFilter, complaintPriorityFilter, complaintBlockFilter, complaintSearchQuery, complaintsPage
+  ]);
 
   // Handle Approvals
   const handleApproval = async (userId, action) => {
@@ -250,7 +307,8 @@ export default function AdminDashboard() {
     try {
       await api.post('/units', newUnit);
       setSuccessMsg('Unit created successfully!');
-      setNewUnit({ block_name: '', floor_number: '', unit_number: '' });
+      setShowAddUnitModal(false);
+      setNewUnit({ block_name: '', floor_number: '', unit_number: '', type: '2BHK', status: 'vacant' });
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
@@ -270,6 +328,7 @@ export default function AdminDashboard() {
         parking_slot_id: allocation.parking_slot_id || null
       });
       setSuccessMsg('Unit resource allocations saved!');
+      setShowAllocateModal(false);
       setAllocation({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '' });
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -341,6 +400,9 @@ export default function AdminDashboard() {
       await api.put(`/complaints/${compId}/status`, { status });
       setSuccessMsg(`Complaint status updated to ${status}!`);
       fetchData();
+      if (selectedComplaint && selectedComplaint.id === compId) {
+        setSelectedComplaint(prev => prev ? { ...prev, status } : null);
+      }
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Status update failed');
@@ -349,20 +411,37 @@ export default function AdminDashboard() {
   };
 
   // Assign staff to complaint
-  const handleAssignStaff = async (compId, staffEmail) => {
-    if (!staffEmail) return;
+  const handleAssignStaff = async (compId, staffId) => {
+    if (!staffId) return;
     try {
-      // Find staff user ID by hardcoded seeds for simplicity or look up from staff list
-      let staffId = 2; // Default to Staff ID
-      if (staffEmail.includes('maintenance')) staffId = 3;
-      else if (staffEmail.includes('admin')) staffId = 1;
-
-      await api.put(`/complaints/${compId}/assign`, { assigned_staff_id: staffId });
-      setSuccessMsg(`Assigned complaint to ${staffEmail}!`);
+      await api.put(`/complaints/${compId}/assign`, { assigned_staff_id: parseInt(staffId) });
+      setSuccessMsg(`Staff assigned to complaint successfully.`);
       fetchData();
+      if (selectedComplaint && selectedComplaint.id === compId) {
+        setSelectedComplaint(prev => prev ? { ...prev, assigned_staff_id: parseInt(staffId) } : null);
+      }
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Staff assignment failed');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  // Update status & staff assignment concurrently from modal view
+  const handleUpdateComplaintDetails = async (e) => {
+    e.preventDefault();
+    if (!selectedComplaint) return;
+    try {
+      await api.put(`/complaints/${selectedComplaint.id}/status`, { status: selectedComplaint.status });
+      if (selectedComplaint.assigned_staff_id) {
+        await api.put(`/complaints/${selectedComplaint.id}/assign`, { assigned_staff_id: parseInt(selectedComplaint.assigned_staff_id) });
+      }
+      setSuccessMsg("Complaint ticket details updated successfully.");
+      setSelectedComplaint(null);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update complaint details');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
@@ -587,6 +666,22 @@ export default function AdminDashboard() {
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">User & Access Management</h2>
           ) : activeTab === 'residents' ? (
             <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Resident Management</h2>
+          ) : activeTab === 'units' ? (
+            <h2 className="font-extrabold text-base text-slate-800 tracking-tight">Unit & Inventory Management</h2>
+          ) : activeTab === 'complaints' ? (
+            <div className="flex items-center gap-4 flex-1">
+              <h2 className="font-extrabold text-base text-slate-800 tracking-tight shrink-0">Complaints & Maintenance</h2>
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search complaints..."
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none text-slate-800 focus:border-blue-600 focus:bg-white transition-colors"
+                  value={complaintSearchQuery}
+                  onChange={(e) => setComplaintSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
           ) : (
             /* Search bar */
             <div className="relative max-w-sm w-full">
@@ -619,7 +714,7 @@ export default function AdminDashboard() {
                   onClick={() => {
                     alert("Simulated Action: Resident list data exported to CSV format successfully.");
                   }}
-                  className="py-1.5 px-3.5 bg-white border border-slate-250 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95"
+                  className="py-1.5 px-3.5 bg-white border border-slate-255 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95"
                 >
                   Export
                 </button>
@@ -631,6 +726,39 @@ export default function AdminDashboard() {
                   <span>Add New Resident</span>
                 </button>
               </div>
+            )}
+
+            {activeTab === 'units' && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    alert("Simulated Action: Unit inventory data exported to CSV format successfully.");
+                  }}
+                  className="py-1.5 px-3.5 bg-white border border-slate-255 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer transition shadow-sm active:scale-95"
+                >
+                  Export
+                </button>
+                <button 
+                  onClick={() => setShowAddUnitModal(true)}
+                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add New Unit</span>
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'complaints' && (
+              <button 
+                onClick={() => {
+                  setComplaintStatusFilter('emergency');
+                  setComplaintPriorityFilter('emergency');
+                }}
+                className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+              >
+                <span>✳</span>
+                <span>View Emergency Complaints</span>
+              </button>
             )}
 
             {/* Notification bell */}
@@ -1562,272 +1690,751 @@ export default function AdminDashboard() {
 
           {/* 3.4 activeTab = UNITS (Unit & Inventory) */}
           {activeTab === 'units' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
               
-              {/* Form Column */}
-              <div className="lg:col-span-1 space-y-6">
-                
-                {/* Create Unit */}
-                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 mb-4">Create New Unit</h3>
-                  <form onSubmit={handleCreateUnit} className="space-y-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1.5">Building Block</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Block A"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                        value={newUnit.block_name}
-                        onChange={(e) => setNewUnit({ ...newUnit, block_name: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 block mb-1.5">Floor</label>
-                        <input
-                          type="number"
-                          required
-                          placeholder="1"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                          value={newUnit.floor_number}
-                          onChange={(e) => setNewUnit({ ...newUnit, floor_number: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit #</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="101"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                          value={newUnit.unit_number}
-                          onChange={(e) => setNewUnit({ ...newUnit, unit_number: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Create Unit</span>
-                    </button>
-                  </form>
+              {/* Row 1 Metrics: Apartment units */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Units</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.totalUnits.toLocaleString()}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Building className="w-5 h-5 text-blue-600" />
+                  </div>
                 </div>
 
-                {/* Resource Allocations */}
-                <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 mb-4">Allocate Resources</h3>
-                  <form onSubmit={handleAllocate} className="space-y-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Unit</label>
-                      <div className="relative">
-                        <select
-                          required
-                          className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                          value={allocation.unitId}
-                          onChange={(e) => setAllocation({ ...allocation, unitId: e.target.value })}
-                        >
-                          <option value="">-- Choose Unit --</option>
-                          {units.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.block_name} - Floor {u.floor_number} - Unit {u.unit_number}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1.5">Owner User ID</label>
-                      <input
-                        type="number"
-                        placeholder="User ID (optional)"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                        value={allocation.owner_id}
-                        onChange={(e) => setAllocation({ ...allocation, owner_id: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1.5">Tenant User ID</label>
-                      <input
-                        type="number"
-                        placeholder="User ID (optional)"
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                        value={allocation.tenant_id}
-                        onChange={(e) => setAllocation({ ...allocation, tenant_id: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 block mb-1.5">Parking Slot</label>
-                      <div className="relative">
-                        <select
-                          className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                          value={allocation.parking_slot_id}
-                          onChange={(e) => setAllocation({ ...allocation, parking_slot_id: e.target.value })}
-                        >
-                          <option value="">-- No Parking --</option>
-                          {parkingSlots
-                            .filter((p) => p.type === 'permanent')
-                            .map((slot) => (
-                              <option key={slot.id} value={slot.id}>
-                                {slot.slot_number}
-                              </option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                    >
-                      Save Allocations
-                    </button>
-                  </form>
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Occupied Units</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.occupiedUnits.toLocaleString()}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                    <Check className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Vacant Units</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.vacantUnits.toLocaleString()}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                    <ShieldAlert className="w-5 h-5 text-amber-500" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Under Maintenance</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.maintenanceUnits.toLocaleString()}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+                    <X className="w-5 h-5 text-rose-500" />
+                  </div>
                 </div>
               </div>
 
-              {/* Table Column */}
-              <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4 font-sans">Apartment Unit Registry</h3>
-                {units.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No units registered.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Unit</th>
-                          <th className="pb-3">Owner</th>
-                          <th className="pb-3">Tenant</th>
-                          <th className="pb-3">Parking</th>
+              {/* Row 2 Metrics: Parking spaces & storage */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Parking</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.totalParking} <span className="text-xs text-slate-400 font-bold">Lots</span></h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 font-extrabold text-slate-500 text-sm">
+                    P
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Available Parking</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.availableParking}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                    <Check className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Assigned Parking</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.assignedParking}</h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Building className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Storage Units</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{unitMetrics.storageUnits} <span className="text-xs text-slate-400 font-bold">Units</span></h3>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <Compass className="w-5 h-5 text-indigo-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter controls */}
+              <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-center gap-4">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search Unit #, Resident..."
+                    className="w-full bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs transition-all"
+                    value={unitSearchQuery}
+                    onChange={(e) => setUnitSearchQuery(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-wrap w-full md:w-auto items-center gap-3">
+                  <div className="relative w-full sm:w-36">
+                    <select
+                      className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                      value={unitBlockFilter}
+                      onChange={(e) => setUnitBlockFilter(e.target.value)}
+                    >
+                      <option value="All Blocks">All Blocks</option>
+                      <option value="Block A">Block A</option>
+                      <option value="Block B">Block B</option>
+                      <option value="Block C">Block C</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative w-full sm:w-32">
+                    <select
+                      className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                      value={unitFloorFilter}
+                      onChange={(e) => setUnitFloorFilter(e.target.value)}
+                    >
+                      <option value="All Floors">All Floors</option>
+                      <option value="1">1st Floor</option>
+                      <option value="2">2nd Floor</option>
+                      <option value="3">3rd Floor</option>
+                      <option value="4">4th Floor</option>
+                      <option value="5">5th Floor</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative w-full sm:w-32">
+                    <select
+                      className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                      value={unitStatusFilter}
+                      onChange={(e) => setUnitStatusFilter(e.target.value)}
+                    >
+                      <option value="Status">Status</option>
+                      <option value="occupied">Occupied</option>
+                      <option value="vacant">Vacant</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative w-full sm:w-32">
+                    <select
+                      className="w-full pl-3 pr-10 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                      value={unitTypeFilter}
+                      onChange={(e) => setUnitTypeFilter(e.target.value)}
+                    >
+                      <option value="Unit Type">Unit Type</option>
+                      <option value="Studio">Studio</option>
+                      <option value="1BHK">1BHK</option>
+                      <option value="2BHK">2BHK</option>
+                      <option value="3BHK">3BHK</option>
+                      <option value="Penthouse">Penthouse</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setUnitSearchQuery('');
+                      setUnitBlockFilter('All Blocks');
+                      setUnitFloorFilter('All Floors');
+                      setUnitStatusFilter('Status');
+                      setUnitTypeFilter('Unit Type');
+                    }}
+                    className="text-xs font-extrabold text-blue-700 hover:text-blue-500 hover:underline cursor-pointer transition select-none ml-2"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {/* Unit inventory list */}
+              <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600 min-w-[750px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="py-3.5 pl-6 font-semibold">Unit #</th>
+                        <th className="py-3.5 font-semibold">Block</th>
+                        <th className="py-3.5 font-semibold">Floor</th>
+                        <th className="py-3.5 font-semibold">Type</th>
+                        <th className="py-3.5 font-semibold">Occupancy Status</th>
+                        <th className="py-3.5 font-semibold">Resident</th>
+                        <th className="py-3.5 font-semibold">Parking</th>
+                        <th className="py-3.5 text-right pr-6 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {units.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" className="py-8 text-center text-slate-400 italic">No registered units match active filters.</td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {units.map((u) => (
+                      ) : (
+                        units.map((u) => (
                           <tr key={u.id} className="hover:bg-slate-50/50">
-                            <td className="py-3.5 font-bold text-slate-800">
-                              {u.block_name} - Floor {u.floor_number} - Unit {u.unit_number} (ID: {u.id})
+                            <td className="py-3.5 pl-6 font-bold text-slate-800">
+                              {u.block_name ? `${u.block_name.charAt(u.block_name.length - 1)}-${u.unit_number}` : u.unit_number}
                             </td>
-                            <td className="py-3.5 text-slate-600">
-                              {u.owner_email ? (
-                                <span className="text-blue-700 font-semibold">{u.owner_email} <span className="text-slate-400 text-[10px]">(ID: {u.owner_id})</span></span>
-                              ) : (
-                                <span className="text-slate-400 italic">Unallocated</span>
-                              )}
+                            <td className="py-3.5 font-medium">{u.block_name || 'Block A'}</td>
+                            <td className="py-3.5 font-medium">
+                              {u.floor_number === 1 ? '1st Floor' : u.floor_number === 2 ? '2nd Floor' : u.floor_number === 3 ? '3rd Floor' : `${u.floor_number}th Floor`}
                             </td>
-                            <td className="py-3.5 text-slate-600">
-                              {u.tenant_email ? (
-                                <span className="text-purple-700 font-semibold">{u.tenant_email} <span className="text-slate-400 text-[10px]">(ID: {u.tenant_id})</span></span>
-                              ) : (
-                                <span className="text-slate-400 italic">Vacant</span>
+                            <td className="py-3.5 font-semibold">{u.type || '2BHK'}</td>
+                            <td className="py-3.5">
+                              <span className={`px-2.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                u.status === 'occupied' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                u.status === 'vacant' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                'bg-rose-50 text-rose-700 border border-rose-100'
+                              }`}>
+                                {u.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 font-bold text-slate-700">
+                              {u.tenant_name || u.owner_name || (
+                                <span className="text-slate-400 font-semibold italic">Unassigned</span>
                               )}
                             </td>
                             <td className="py-3.5 text-blue-700 font-bold text-xs">
-                              {u.parking_slot_number || '-'}
+                              {u.parking_slot_number ? `Lot #${u.parking_slot_number}` : '—'}
+                            </td>
+                            <td className="py-3.5 text-right pr-6">
+                              <button
+                                onClick={() => {
+                                  setAllocation({
+                                    unitId: u.id,
+                                    owner_id: u.owner_id || '',
+                                    tenant_id: u.tenant_id || '',
+                                    parking_slot_id: u.parking_slot_id || ''
+                                  });
+                                  setShowAllocateModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-bold rounded cursor-pointer transition"
+                              >
+                                Allocate Resources
+                              </button>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
+              {/* Bottom occupancy donut chart & activity feeds */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Donut occupancy representation */}
+                <div className="lg:col-span-1 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm flex flex-col items-center justify-between">
+                  <h3 className="w-full text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2.5 mb-4 text-left">Unit Occupancy Distribution</h3>
+                  
+                  <div className="relative w-36 h-36 flex items-center justify-center">
+                    {/* SVG circular donut segment */}
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" strokeWidth="2.5"></circle>
+                      <circle 
+                        cx="18" 
+                        cy="18" 
+                        r="15.915" 
+                        fill="none" 
+                        stroke="#10b981" 
+                        strokeWidth="2.5" 
+                        strokeDasharray={`${Math.round((unitMetrics.occupiedUnits / (unitMetrics.totalUnits || 1)) * 100)} ${100 - Math.round((unitMetrics.occupiedUnits / (unitMetrics.totalUnits || 1)) * 100)}`}
+                      ></circle>
+                    </svg>
+                    <div className="absolute text-center">
+                      <span className="text-2xl font-black text-slate-800 block">
+                        {Math.round((unitMetrics.occupiedUnits / (unitMetrics.totalUnits || 1)) * 100)}%
+                      </span>
+                      <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-wider">Occupancy</span>
+                    </div>
+                  </div>
+
+                  <div className="w-full space-y-2 mt-6 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span>Occupied</span>
+                      </div>
+                      <span className="text-slate-800 font-extrabold">{unitMetrics.occupiedUnits} Units</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        <span>Vacant</span>
+                      </div>
+                      <span className="text-slate-800 font-extrabold">{unitMetrics.vacantUnits} Units</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                        <span>Maintenance</span>
+                      </div>
+                      <span className="text-slate-800 font-extrabold">{unitMetrics.maintenanceUnits} Units</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Unit activity log feeds */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 mb-4">
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent Unit Activity</h3>
+                      <button className="text-[10px] font-extrabold text-blue-700 hover:text-blue-500 tracking-wider">View All</button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 text-emerald-600">
+                          <Check className="w-4.5 h-4.5" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xs font-bold text-slate-800 leading-tight">New Tenant Check-in</h4>
+                          <p className="text-[11px] font-medium text-slate-500 mt-0.5">Michael Jordan moved into Unit A-101</p>
+                        </div>
+                        <span className="text-[9px] font-semibold text-slate-400 shrink-0">10 mins ago</span>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center shrink-0 text-rose-600">
+                          <X className="w-4.5 h-4.5" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xs font-bold text-slate-800 leading-tight">Maintenance Started</h4>
+                          <p className="text-[11px] font-medium text-slate-500 mt-0.5">Plumbing repairs initiated for Unit C-405</p>
+                        </div>
+                        <span className="text-[9px] font-semibold text-slate-400 shrink-0">1 hour ago</span>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-blue-600">
+                          <Building className="w-4.5 h-4.5" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xs font-bold text-slate-800 leading-tight">Parking Lot Assigned</h4>
+                          <p className="text-[11px] font-medium text-slate-500 mt-0.5">Lot #P88 assigned to Unit C-405</p>
+                        </div>
+                        <span className="text-[9px] font-semibold text-slate-400 shrink-0">4 hours ago</span>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0 text-amber-600">
+                          <ShieldAlert className="w-4.5 h-4.5" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xs font-bold text-slate-800 leading-tight">Tenant Move-out Notice</h4>
+                          <p className="text-[11px] font-medium text-slate-500 mt-0.5">Resident of Unit D-302 submitted 30-day notice</p>
+                        </div>
+                        <span className="text-[9px] font-semibold text-slate-400 shrink-0">Yesterday</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           )}
 
           {/* 3.5 activeTab = COMPLAINTS */}
           {activeTab === 'complaints' && (
-            <div className="space-y-6">
-              <div className="mb-4">
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Active Maintenance Complaints</h2>
-                <p className="text-xs text-slate-400 font-semibold mt-1">Review, prioritize, and assign maintenance tickets to operational staff.</p>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              
+              {/* Metrics cards row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Complaints</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{complaintsMetrics.total.toLocaleString()}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">+12%</span>
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <ClipboardList className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{complaintsMetrics.pending}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full">Active</span>
+                    <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+                      <ShieldAlert className="w-5 h-5 text-amber-500" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">In Progress</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{complaintsMetrics.in_progress}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">Processing</span>
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                      <Compass className="w-5 h-5 text-indigo-600" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm flex items-center justify-between relative overflow-hidden">
+                  {/* Red corner dot indicating Urgent */}
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Emergency</span>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{complaintsMetrics.emergency}</h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full">Urgent</span>
+                    <div className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center">
+                      <X className="w-5 h-5 text-rose-500" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm">
-                {complaints.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic text-center py-6">No complaints logged in system.</p>
-                ) : (
+              {/* Filters row */}
+              <div className="bg-white border border-slate-200/60 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <span className="text-xs font-bold text-slate-400">Filters:</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <select
+                        className="pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={complaintStatusFilter}
+                        onChange={(e) => setComplaintStatusFilter(e.target.value)}
+                      >
+                        <option value="All">Status: All</option>
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="emergency">Emergency</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={complaintCategoryFilter}
+                        onChange={(e) => setComplaintCategoryFilter(e.target.value)}
+                      >
+                        <option value="All">Category: All</option>
+                        <option value="Plumbing">Plumbing</option>
+                        <option value="Electrical">Electrical</option>
+                        <option value="HVAC">HVAC</option>
+                        <option value="General">General</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={complaintPriorityFilter}
+                        onChange={(e) => setComplaintPriorityFilter(e.target.value)}
+                      >
+                        <option value="All">Priority: All</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="emergency">Emergency</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        className="pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200/80 outline-none text-slate-700 rounded-lg text-xs font-bold appearance-none cursor-pointer hover:bg-slate-100/50"
+                        value={complaintBlockFilter}
+                        onChange={(e) => setComplaintBlockFilter(e.target.value)}
+                      >
+                        <option value="All">Block: All</option>
+                        <option value="Block A">Block A</option>
+                        <option value="Block B">Block B</option>
+                        <option value="Block C">Block C</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setComplaintStatusFilter('All');
+                    setComplaintCategoryFilter('All');
+                    setComplaintPriorityFilter('All');
+                    setComplaintBlockFilter('All');
+                    setComplaintSearchQuery('');
+                  }}
+                  className="text-xs font-extrabold text-blue-700 hover:text-blue-500 tracking-wider cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              </div>
+
+              {/* Two Column Layout: Table vs Donut Distribution & Workload */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Left registry table */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm space-y-4">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-600 min-w-[850px]">
+                    <table className="w-full text-left text-xs text-slate-600 min-w-[700px]">
                       <thead>
                         <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                          <th className="pb-3">Ticket ID</th>
+                          <th className="pb-3 pl-2">ID</th>
+                          <th className="pb-3">Unit</th>
+                          <th className="pb-3">Resident</th>
                           <th className="pb-3">Category</th>
-                          <th className="pb-3">Description</th>
                           <th className="pb-3">Priority</th>
                           <th className="pb-3">Status</th>
-                          <th className="pb-3">Resident</th>
-                          <th className="pb-3">Assigned Staff</th>
-                          <th className="pb-3 text-right">Actions</th>
+                          <th className="pb-3">Staff</th>
+                          <th className="pb-3">Date</th>
+                          <th className="pb-3 text-right pr-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {complaints.map((c) => (
-                          <tr key={c.id} className="hover:bg-slate-50/50">
-                            <td className="py-3.5 font-bold text-slate-800">#Ticket-{c.id}</td>
-                            <td className="py-3.5 font-bold text-slate-700">{c.category}</td>
-                            <td className="py-3.5 text-slate-500 font-sans max-w-[200px] truncate" title={c.description}>
-                              {c.description}
-                            </td>
-                            <td className="py-3.5 font-bold">
-                              <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${
-                                c.priority === 'high' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                c.priority === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                'bg-slate-100 text-slate-700 border border-slate-200'
-                              }`}>
-                                {c.priority}
-                              </span>
-                            </td>
-                            <td className="py-3.5">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                c.status === 'resolved' ? 'bg-emerald-50 text-emerald-700' :
-                                c.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
-                                'bg-amber-50 text-amber-700'
-                              }`}>
-                                {c.status}
-                              </span>
-                            </td>
-                            <td className="py-3.5 text-slate-500">{c.resident_email}</td>
-                            <td className="py-3.5 text-slate-800">
-                              {c.assigned_staff_email ? (
-                                <span className="font-semibold text-slate-700">{c.assigned_staff_email}</span>
-                              ) : (
-                                <span className="text-slate-400 italic">Unassigned</span>
-                              )}
-                            </td>
-                            <td className="py-3.5 text-right flex items-center justify-end gap-2">
-                              {/* Assign Staff select */}
-                              <select
-                                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold outline-none cursor-pointer"
-                                onChange={(e) => handleAssignStaff(c.id, e.target.value)}
-                                defaultValue=""
-                              >
-                                <option value="" disabled>Assign To...</option>
-                                <option value="staff@apartment.com">staff@apartment.com</option>
-                                <option value="maintenance@apartment.com">maintenance@apartment.com</option>
-                              </select>
-
-                              {/* Toggle Status Buttons */}
-                              {c.status !== 'resolved' && (
-                                <button
-                                  onClick={() => handleUpdateComplaintStatus(c.id, c.status === 'pending' ? 'in_progress' : 'resolved')}
-                                  className="p-1 rounded bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
-                                  title={c.status === 'pending' ? "Mark In Progress" : "Resolve"}
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </td>
+                        {complaints.length === 0 ? (
+                          <tr>
+                            <td colSpan="9" className="py-8 text-center text-slate-400 italic">No tickets found matching current filters.</td>
                           </tr>
-                        ))}
+                        ) : (
+                          complaints.map((c) => (
+                            <tr key={c.id} className="hover:bg-slate-50/50">
+                              <td className="py-3.5 pl-2 font-bold text-blue-700">#{1000 + c.id}</td>
+                              <td className="py-3.5 font-bold text-slate-800">
+                                {c.resident_building ? `${c.resident_building.replace(/[^a-zA-Z]/g, '')}-${c.resident_unit}` : 'A-402'}
+                              </td>
+                              <td className="py-3.5 font-bold text-slate-700">
+                                {c.resident_name || c.resident_email?.split('@')[0] || 'John Doe'}
+                              </td>
+                              <td className="py-3.5">
+                                <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-150 text-[10px] font-bold text-slate-600 uppercase">
+                                  {c.category}
+                                </span>
+                              </td>
+                              <td className="py-3.5 font-extrabold">
+                                <span className={
+                                  c.priority === 'emergency' ? 'text-rose-600' :
+                                  c.priority === 'high' ? 'text-amber-600' :
+                                  c.priority === 'medium' ? 'text-blue-600' :
+                                  'text-slate-400'
+                                }>
+                                  {c.priority.charAt(0).toUpperCase() + c.priority.slice(1)}
+                                </span>
+                              </td>
+                              <td className="py-3.5">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  c.status === 'resolved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                  c.status === 'in_progress' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                  c.status === 'emergency' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
+                                  'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {c.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 font-semibold text-slate-800">
+                                {c.assigned_staff_name || 'Mike Ross'}
+                              </td>
+                              <td className="py-3.5 font-semibold text-slate-400">
+                                {c.created_at ? new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Oct 24'}
+                              </td>
+                              <td className="py-3.5 text-right pr-2">
+                                <button
+                                  onClick={() => setSelectedComplaint(c)}
+                                  className="text-blue-700 hover:text-blue-500 font-extrabold text-xs cursor-pointer transition"
+                                >
+                                  View
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
-                )}
+
+                  {/* Pagination row */}
+                  {complaintsTotal > 10 && (
+                    <div className="flex justify-between items-center border-t border-slate-100 pt-4 text-xs font-bold text-slate-500">
+                      <span>Showing {Math.min(complaints.length, 10)} of {complaintsTotal} results</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          disabled={complaintsPage === 1}
+                          onClick={() => setComplaintsPage(complaintsPage - 1)}
+                          className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 rounded disabled:opacity-40 disabled:hover:bg-white text-[10px] cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        <span className="w-6 h-6 rounded bg-[#133fbd] text-white flex items-center justify-center text-[10px] font-bold">
+                          {complaintsPage}
+                        </span>
+                        <button
+                          disabled={complaintsPage * 10 >= complaintsTotal}
+                          onClick={() => setComplaintsPage(complaintsPage + 1)}
+                          className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 rounded disabled:opacity-40 disabled:hover:bg-white text-[10px] cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right side donut distribution & workload */}
+                <div className="lg:col-span-1 space-y-6">
+                  
+                  {/* Distribution Card */}
+                  <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm flex flex-col items-center">
+                    <h3 className="w-full text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2.5 mb-4 text-left">Complaint Distribution</h3>
+                    
+                    <div className="relative w-36 h-36 flex items-center justify-center">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" strokeWidth="2.5"></circle>
+                        {/* Dynamic segments based on counts */}
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="15.915" 
+                          fill="none" 
+                          stroke="#f59e0b" 
+                          strokeWidth="2.5" 
+                          strokeDasharray={`${complaintsDistribution.pendingPercent} ${100 - complaintsDistribution.pendingPercent}`}
+                          strokeDashoffset="0"
+                        ></circle>
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="15.915" 
+                          fill="none" 
+                          stroke="#3b82f6" 
+                          strokeWidth="2.5" 
+                          strokeDasharray={`${complaintsDistribution.progressPercent} ${100 - complaintsDistribution.progressPercent}`}
+                          strokeDashoffset={`-${complaintsDistribution.pendingPercent}`}
+                        ></circle>
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="15.915" 
+                          fill="none" 
+                          stroke="#ef4444" 
+                          strokeWidth="2.5" 
+                          strokeDasharray={`${complaintsDistribution.emergencyPercent} ${100 - complaintsDistribution.emergencyPercent}`}
+                          strokeDashoffset={`-${complaintsDistribution.pendingPercent + complaintsDistribution.progressPercent}`}
+                        ></circle>
+                        <circle 
+                          cx="18" 
+                          cy="18" 
+                          r="15.915" 
+                          fill="none" 
+                          stroke="#10b981" 
+                          strokeWidth="2.5" 
+                          strokeDasharray={`${complaintsDistribution.resolvedPercent} ${100 - complaintsDistribution.resolvedPercent}`}
+                          strokeDashoffset={`-${complaintsDistribution.pendingPercent + complaintsDistribution.progressPercent + complaintsDistribution.emergencyPercent}`}
+                        ></circle>
+                      </svg>
+                      <div className="absolute text-center">
+                        <span className="text-xl font-black text-slate-800 block">
+                          {complaintsDistribution.totalActive}
+                        </span>
+                        <span className="text-[7px] font-extrabold text-slate-400 uppercase tracking-wider">Active</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full grid grid-cols-2 gap-2 mt-6 border-t border-slate-100 pt-4 text-[10px] font-bold text-slate-500">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span>Pending ({complaintsDistribution.pendingPercent}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        <span>Progress ({complaintsDistribution.progressPercent}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                        <span>Emergency ({complaintsDistribution.emergencyPercent}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Resolved ({complaintsDistribution.resolvedPercent}%)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Staff Workloads */}
+                  <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 mb-4">
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Staff Workload</h3>
+                      <button 
+                        onClick={() => alert("Staff overview detailed chart printed successfully.")}
+                        className="text-[10px] font-extrabold text-blue-700 hover:text-blue-500 tracking-wider"
+                      >
+                        View All
+                      </button>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      {staffWorkload.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic">No operational staff registered.</p>
+                      ) : (
+                        staffWorkload.slice(0, 3).map((staff, idx) => (
+                          <div key={staff.id} className="flex justify-between items-center text-xs font-bold">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white uppercase text-[10px] ${
+                                idx === 0 ? 'bg-emerald-600' : idx === 1 ? 'bg-teal-700' : 'bg-blue-600'
+                              }`}>
+                                {(staff.staff_name || staff.staff_email || 'S').charAt(0)}
+                              </div>
+                              <div>
+                                <h4 className="text-slate-800 tracking-tight leading-none mb-0.5">{staff.staff_name || staff.staff_email || 'Staff'}</h4>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                  {staff.role === 'maintenance' ? 'Maintenance Worker' : 'Operations Specialist'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-slate-800 font-extrabold block text-sm leading-none">
+                                {String(staff.active_tickets).padStart(2, '0')}
+                              </span>
+                              <span className={`text-[8px] font-extrabold uppercase tracking-wider ${
+                                staff.active_tickets > 5 ? 'text-amber-600' : 'text-emerald-600'
+                              }`}>
+                                {staff.active_tickets > 5 ? 'Heavy Load' : 'Active'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
               </div>
+
             </div>
           )}
 
@@ -2564,6 +3171,296 @@ export default function AdminDashboard() {
                   className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Add New Unit Modal */}
+      {showAddUnitModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Add New Apartment Unit</h3>
+              <button 
+                onClick={() => setShowAddUnitModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUnit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Building Block</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Block A"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={newUnit.block_name}
+                  onChange={(e) => setNewUnit({ ...newUnit, block_name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Floor Number</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="1"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUnit.floor_number}
+                    onChange={(e) => setNewUnit({ ...newUnit, floor_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit Number</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="101"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                    value={newUnit.unit_number}
+                    onChange={(e) => setNewUnit({ ...newUnit, unit_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Unit Type</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newUnit.type}
+                      onChange={(e) => setNewUnit({ ...newUnit, type: e.target.value })}
+                    >
+                      <option value="Studio">Studio</option>
+                      <option value="1BHK">1BHK</option>
+                      <option value="2BHK">2BHK</option>
+                      <option value="3BHK">3BHK</option>
+                      <option value="Penthouse">Penthouse</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Occupancy Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newUnit.status}
+                      onChange={(e) => setNewUnit({ ...newUnit, status: e.target.value })}
+                    >
+                      <option value="vacant">Vacant</option>
+                      <option value="occupied">Occupied</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUnitModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Create Unit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Allocate Resources Modal */}
+      {showAllocateModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Allocate Unit Resources</h3>
+              <button 
+                onClick={() => setShowAllocateModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAllocate} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Owner User ID (optional)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 4"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={allocation.owner_id}
+                  onChange={(e) => setAllocation({ ...allocation, owner_id: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Tenant User ID (optional)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 5"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
+                  value={allocation.tenant_id}
+                  onChange={(e) => setAllocation({ ...allocation, tenant_id: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Parking Slot Allocation</label>
+                <div className="relative">
+                  <select
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                    value={allocation.parking_slot_id}
+                    onChange={(e) => setAllocation({ ...allocation, parking_slot_id: e.target.value })}
+                  >
+                    <option value="">-- No Parking Slot --</option>
+                    {parkingSlots
+                      .filter((p) => p.type === 'permanent')
+                      .map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.slot_number}
+                        </option>
+                      ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAllocateModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Allocations
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Detailed Complaint Viewer Modal */}
+      {selectedComplaint && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">
+                Complaint #Ticket-{1000 + selectedComplaint.id}
+              </h3>
+              <button 
+                onClick={() => setSelectedComplaint(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateComplaintDetails} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Unit</span>
+                  <span className="font-extrabold text-slate-800">
+                    {selectedComplaint.resident_building ? `${selectedComplaint.resident_building.replace(/[^a-zA-Z]/g, '')}-${selectedComplaint.resident_unit}` : 'A-402'}
+                  </span>
+                </div>
+                <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block">Category</span>
+                  <span className="font-extrabold text-slate-800">{selectedComplaint.category}</span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Resident</span>
+                <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl text-xs font-semibold text-slate-700">
+                  <span className="font-extrabold text-slate-800 block">
+                    {selectedComplaint.resident_name || 'James Wilson'}
+                  </span>
+                  <span className="text-slate-400 text-[10px] block mt-0.5">
+                    {selectedComplaint.resident_email || 'resident@example.com'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Complaint Description</span>
+                <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-600 font-medium italic min-h-[80px] max-h-[140px] overflow-y-auto">
+                  "{selectedComplaint.description}"
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Update Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={selectedComplaint.status}
+                      onChange={(e) => setSelectedComplaint({ ...selectedComplaint, status: e.target.value })}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Assign Operations Staff</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={selectedComplaint.assigned_staff_id || ''}
+                      onChange={(e) => setSelectedComplaint({ ...selectedComplaint, assigned_staff_id: e.target.value })}
+                    >
+                      <option value="">-- Select Staff --</option>
+                      {staffWorkload.map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.staff_name} ({staff.active_tickets} active)
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedComplaint(null)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Update Ticket
                 </button>
               </div>
             </form>

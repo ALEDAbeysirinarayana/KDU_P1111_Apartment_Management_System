@@ -31,54 +31,148 @@ const submitComplaint = async (req, res) => {
   }
 };
 
-// @desc    Get complaints based on user role
+// @desc    Get complaints based on user role and filters
 // @route   GET /api/complaints
 // @access  Private (All Roles)
 const getComplaints = async (req, res) => {
   const { id: userId, role } = req.user;
 
   try {
-    let query = '';
+    const { status, category, priority, block, search, page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let conditions = [];
     let params = [];
 
-    if (role === 'admin' || role === 'staff') {
-      // Admins and Staff see all complaints
-      query = `
-        SELECT c.*, u.email AS resident_email, staff.email AS assigned_staff_email
-        FROM complaints c
-        JOIN users u ON c.user_id = u.id
-        LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-        ORDER BY c.created_at DESC
-      `;
-    } else if (role === 'maintenance') {
-      // Maintenance Staff see all complaints, prioritized
-      query = `
-        SELECT c.*, u.email AS resident_email, staff.email AS assigned_staff_email
-        FROM complaints c
-        JOIN users u ON c.user_id = u.id
-        LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-        ORDER BY 
-          CASE c.priority 
-            WHEN 'high' THEN 1 
-            WHEN 'medium' THEN 2 
-            WHEN 'low' THEN 3 
-          END ASC, 
-          c.created_at DESC
-      `;
-    } else {
-      // Homeowners/Tenants see only their own complaints
-      query = `
-        SELECT c.*, staff.email AS assigned_staff_email
-        FROM complaints c
-        LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-        WHERE c.user_id = ?
-        ORDER BY c.created_at DESC
-      `;
-      params = [userId];
+    if (role === 'maintenance') {
+      // Limit to tickets assigned to them or unassigned
+      conditions.push('(c.assigned_staff_id = ? OR c.assigned_staff_id IS NULL)');
+      params.push(userId);
+    } else if (role !== 'admin' && role !== 'staff') {
+      // Homeowners/Tenants only see their own tickets
+      conditions.push('c.user_id = ?');
+      params.push(userId);
     }
 
-    const [complaints] = await pool.query(query, params);
-    return res.status(200).json(complaints);
+    // Apply Filter Criteria
+    if (status && status !== 'All' && status !== 'Status: All') {
+      conditions.push('c.status = ?');
+      params.push(status.toLowerCase());
+    }
+
+    if (category && category !== 'All' && category !== 'Category: All') {
+      conditions.push('c.category = ?');
+      params.push(category);
+    }
+
+    if (priority && priority !== 'All' && priority !== 'Priority: All') {
+      conditions.push('c.priority = ?');
+      params.push(priority.toLowerCase());
+    }
+
+    if (block && block !== 'All' && block !== 'Block: All') {
+      conditions.push('u.building_name = ?');
+      params.push(block);
+    }
+
+    if (search && search.trim() !== '') {
+      conditions.push('(c.description LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR u.unit_number LIKE ?)');
+      const searchPattern = `%${search.trim()}%`;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Calculate total matching records
+    const countQuery = `
+      SELECT COUNT(*) AS count 
+      FROM complaints c
+      JOIN users u ON c.user_id = u.id
+      ${whereClause}
+    `;
+    const [countRes] = await pool.query(countQuery, params);
+    const totalMatch = countRes[0]?.count || 0;
+
+    // Fetch complaints
+    const selectQuery = `
+      SELECT 
+        c.*, 
+        u.email AS resident_email, 
+        u.full_name AS resident_name, 
+        u.building_name AS resident_building, 
+        u.unit_number AS resident_unit,
+        staff.email AS assigned_staff_email, 
+        staff.full_name AS assigned_staff_name
+      FROM complaints c
+      JOIN users u ON c.user_id = u.id
+      LEFT JOIN users staff ON c.assigned_staff_id = staff.id
+      ${whereClause}
+      ORDER BY 
+        CASE c.priority 
+          WHEN 'emergency' THEN 1
+          WHEN 'high' THEN 2 
+          WHEN 'medium' THEN 3 
+          WHEN 'low' THEN 4 
+        END ASC, 
+        c.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    const [complaints] = await pool.query(selectQuery, [...params, parseInt(limit), parseInt(offset)]);
+
+    // Calculate Metrics for summary cards
+    const [[complaintMetrics]] = await pool.query(`
+      SELECT 
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress,
+        SUM(CASE WHEN status = 'emergency' OR priority = 'emergency' THEN 1 ELSE 0 END) AS emergency
+      FROM complaints
+    `);
+
+    // Calculate staff workloads
+    const [staffWorkload] = await pool.query(`
+      SELECT 
+        u.id, 
+        u.full_name AS staff_name, 
+        u.email AS staff_email,
+        u.role,
+        SUM(CASE WHEN c.status IN ('pending', 'in_progress', 'emergency') THEN 1 ELSE 0 END) AS active_tickets
+      FROM users u
+      LEFT JOIN complaints c ON c.assigned_staff_id = u.id
+      WHERE u.role IN ('staff', 'maintenance')
+      GROUP BY u.id
+      ORDER BY active_tickets DESC
+    `);
+
+    // Calculate dynamic distribution breakdown
+    const [[distribution]] = await pool.query(`
+      SELECT
+        COUNT(*) AS total_active,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS progress_count,
+        SUM(CASE WHEN status = 'emergency' THEN 1 ELSE 0 END) AS emergency_count,
+        SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) AS resolved_count
+      FROM complaints
+    `);
+
+    return res.status(200).json({
+      complaints,
+      total: totalMatch,
+      metrics: {
+        total: complaintMetrics.total || 0,
+        pending: complaintMetrics.pending || 0,
+        in_progress: complaintMetrics.in_progress || 0,
+        emergency: complaintMetrics.emergency || 0
+      },
+      distribution: {
+        totalActive: distribution.total_active || 0,
+        pendingPercent: distribution.total_active > 0 ? Math.round((distribution.pending_count / distribution.total_active) * 100) : 25,
+        progressPercent: distribution.total_active > 0 ? Math.round((distribution.progress_count / distribution.total_active) * 100) : 35,
+        emergencyPercent: distribution.total_active > 0 ? Math.round((distribution.emergency_count / distribution.total_active) * 100) : 15,
+        resolvedPercent: distribution.total_active > 0 ? Math.round((distribution.resolved_count / distribution.total_active) * 100) : 25
+      },
+      staffWorkload
+    });
   } catch (error) {
     console.error('Get complaints error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
@@ -93,7 +187,7 @@ const updateComplaintStatus = async (req, res) => {
   const { status } = req.body;
 
   try {
-    if (!status || !['pending', 'in_progress', 'resolved'].includes(status)) {
+    if (!status || !['pending', 'in_progress', 'resolved', 'emergency'].includes(status)) {
       return res.status(400).json({ message: 'Invalid or missing status.' });
     }
 
