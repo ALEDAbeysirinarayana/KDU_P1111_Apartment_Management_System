@@ -71,6 +71,18 @@ async function runSeed() {
       }
     }
 
+    // ── PATCH: users.status ENUM – add 'suspended' ──────────────────────────
+    console.log('[Patch] Expanding users.status ENUM to include suspended...');
+    try {
+      await pool.query(
+        `ALTER TABLE users MODIFY COLUMN status ENUM('pending','approved','rejected','suspended') DEFAULT 'pending'`
+      );
+      console.log('  users.status ENUM updated.');
+    } catch (e) {
+      console.log('  users.status ENUM patch failed (may already be correct):', e.message);
+    }
+
+
     // ── PATCH: parking_management – drop unique on slot_number, add composite ─
     console.log('[Patch] Patching parking_management table...');
     try {

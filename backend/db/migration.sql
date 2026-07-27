@@ -21,7 +21,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin', 'staff', 'maintenance', 'homeowner', 'tenant') NOT NULL,
-    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    status ENUM('pending', 'approved', 'rejected', 'suspended') DEFAULT 'pending',
     owner_id INT NULL,
     owner_approved TINYINT(1) DEFAULT 0,
     full_name VARCHAR(255) NULL,
