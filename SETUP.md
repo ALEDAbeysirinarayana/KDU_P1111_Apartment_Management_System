@@ -41,21 +41,23 @@ VITE_API_URL=http://your_backend_ip_or_domain:port/api
 
 ## 3. Database Migration and Seeding
 
-The backend includes a seed script that automatically creates the database schema, creates the tables, and inserts initial seed data for testing.
+The backend includes a single seed script that **fully** sets up the database — it creates the schema, applies all column patches, creates all tables, and inserts all seed/test data in one step.
 
 1. Install backend dependencies first:
    ```bash
    cd backend
-   ```
-   ```bash
    npm install
    ```
 2. Make sure your local MySQL Server is **running**.
-3. Run the database setup script:
+3. Run the complete database setup:
    ```bash
    npm run seed
    ```
-   *This command will create the database, execute `migration.sql` to build tables, and seed roles/accounts/slots.*
+   *This command will:*
+   - *Create the database and all tables*
+   - *Apply all column patches (units, notices, bills, complaints, parking, etc.)*
+   - *Create additional tables (facilities, events, event_registrations, payment_transactions)*
+   - *Insert seed users, parking slots, units, facilities, events, and notices*
 
 ---
 
