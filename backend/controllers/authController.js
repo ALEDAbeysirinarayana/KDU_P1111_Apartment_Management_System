@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
+const { sendRegistrationEmail, sendAdminApprovalEmail, sendOwnerApprovalEmail } = require('../utils/emailService');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_12345_apartment_system';
@@ -80,6 +81,11 @@ const register = async (req, res) => {
         email, passwordHash, role, 'pending', finalOwnerId, 0,
         fullName, nicOrPassport, phoneNumber, buildingName, unitNumber, vehicleNumber || null, relationshipToOwner || null
       ]
+    );
+
+    // Send registration confirmation email (fire-and-forget)
+    sendRegistrationEmail({ email, fullName, role }).catch((err) =>
+      console.error('[Email] Registration email failed:', err.message)
     );
 
     return res.status(201).json({
@@ -220,6 +226,12 @@ const approveUser = async (req, res) => {
       if (targetUser.role === 'homeowner') {
         const finalStatus = action === 'approve' ? 'approved' : 'rejected';
         await pool.query('UPDATE users SET status = ? WHERE id = ?', [finalStatus, userId]);
+
+        // Notify homeowner of admin decision (fire-and-forget)
+        sendAdminApprovalEmail(targetUser, action).catch((err) =>
+          console.error('[Email] Admin approval email failed:', err.message)
+        );
+
         return res.status(200).json({ message: `Homeowner has been ${finalStatus}.` });
       }
 
@@ -230,6 +242,12 @@ const approveUser = async (req, res) => {
         }
         const finalStatus = action === 'approve' ? 'approved' : 'rejected';
         await pool.query('UPDATE users SET status = ? WHERE id = ?', [finalStatus, userId]);
+
+        // Notify tenant of admin decision (fire-and-forget)
+        sendAdminApprovalEmail(targetUser, action).catch((err) =>
+          console.error('[Email] Admin approval email failed:', err.message)
+        );
+
         return res.status(200).json({ message: `Tenant has been ${finalStatus} by Admin.` });
       }
 
@@ -246,9 +264,21 @@ const approveUser = async (req, res) => {
 
       if (action === 'approve') {
         await pool.query('UPDATE users SET owner_approved = 1 WHERE id = ?', [userId]);
+
+        // Notify tenant that homeowner approved (fire-and-forget)
+        sendOwnerApprovalEmail(targetUser, 'approve').catch((err) =>
+          console.error('[Email] Homeowner approval email failed:', err.message)
+        );
+
         return res.status(200).json({ message: 'Tenant approved by Homeowner. Now pending Admin approval.' });
       } else {
         await pool.query('UPDATE users SET status = "rejected" WHERE id = ?', [userId]);
+
+        // Notify tenant that homeowner rejected (fire-and-forget)
+        sendOwnerApprovalEmail(targetUser, 'reject').catch((err) =>
+          console.error('[Email] Homeowner rejection email failed:', err.message)
+        );
+
         return res.status(200).json({ message: 'Tenant request rejected by Homeowner.' });
       }
     } else {
