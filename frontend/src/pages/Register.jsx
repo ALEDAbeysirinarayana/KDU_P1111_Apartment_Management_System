@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, Building, ArrowLeft, Loader2, Key, Info, CheckCircle2, ChevronDown, Check } from 'lucide-react';
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, api } = useAuth();
   const navigate = useNavigate();
 
   // Form State Fields
@@ -20,6 +20,38 @@ export default function Register() {
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [relationshipToOwner, setRelationshipToOwner] = useState('');
+
+  // Building & Unit Dropdown States
+  const [availableBlocks, setAvailableBlocks] = useState(['Block A', 'Block B', 'Block C', 'Block D']);
+  const [allUnits, setAllUnits] = useState([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
+
+  // Fetch available buildings and units from backend
+  useEffect(() => {
+    const fetchAvailableUnits = async () => {
+      setLoadingUnits(true);
+      try {
+        const res = await api.get('/auth/available-units');
+        if (res.data) {
+          if (res.data.blocks && res.data.blocks.length > 0) {
+            setAvailableBlocks(res.data.blocks);
+          }
+          if (res.data.units && Array.isArray(res.data.units)) {
+            setAllUnits(res.data.units);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch available units:', err);
+      } finally {
+        setLoadingUnits(false);
+      }
+    };
+    fetchAvailableUnits();
+  }, []);
+
+  const filteredUnits = buildingName
+    ? allUnits.filter(u => u.block_name === buildingName)
+    : [];
 
   // UI State
   const [confirmCorrect, setConfirmCorrect] = useState(false);
@@ -292,29 +324,55 @@ export default function Register() {
                           required
                           className="w-full pl-3.5 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg transition-all duration-200 appearance-none font-medium text-sm cursor-pointer"
                           value={buildingName}
-                          onChange={(e) => setBuildingName(e.target.value)}
+                          onChange={(e) => {
+                            setBuildingName(e.target.value);
+                            setUnitNumber('');
+                          }}
                         >
                           <option value="" disabled>Select Building</option>
-                          <option value="Block A">Block A</option>
-                          <option value="Block B">Block B</option>
-                          <option value="Block C">Block C</option>
-                          <option value="Block D">Block D</option>
+                          {availableBlocks.map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
                         </select>
                         <ChevronDown className="absolute right-3.5 top-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
 
-                    {/* Unit Number */}
+                    {/* Unit Number (Available Dropdown) */}
                     <div>
-                      <label className="text-[10.5px] font-bold text-slate-500 mb-1.5 block">Unit Number</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. A-12"
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all duration-200 font-medium text-sm"
-                        value={unitNumber}
-                        onChange={(e) => setUnitNumber(e.target.value)}
-                      />
+                      <label className="text-[10.5px] font-bold text-slate-500 mb-1.5 block">
+                        Unit Number {buildingName ? `(Available in ${buildingName})` : ''}
+                      </label>
+                      <div className="relative">
+                        {filteredUnits.length > 0 ? (
+                          <>
+                            <select
+                              required
+                              disabled={!buildingName}
+                              className="w-full pl-3.5 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg transition-all duration-200 appearance-none font-medium text-sm cursor-pointer disabled:opacity-50"
+                              value={unitNumber}
+                              onChange={(e) => setUnitNumber(e.target.value)}
+                            >
+                              <option value="" disabled>Select Unit</option>
+                              {filteredUnits.map((u) => (
+                                <option key={u.id || u.unit_number} value={u.unit_number}>
+                                  Unit {u.unit_number} {u.type ? `(${u.type})` : ''} {u.status ? `• ${u.status}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3.5 top-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                          </>
+                        ) : (
+                          <input
+                            type="text"
+                            required
+                            placeholder={!buildingName ? 'Select Building First' : loadingUnits ? 'Loading Units...' : 'e.g. A-12'}
+                            className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all duration-200 font-medium text-sm disabled:opacity-50"
+                            value={unitNumber}
+                            onChange={(e) => setUnitNumber(e.target.value)}
+                          />
+                        )}
+                      </div>
                     </div>
 
                     {/* Vehicle Number - Spans full width */}

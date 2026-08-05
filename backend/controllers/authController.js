@@ -305,6 +305,29 @@ const getApprovedHomeowners = async (req, res) => {
   }
 };
 
+// @desc    Get available units grouped by building for public registration dropdown
+// @route   GET /api/auth/available-units
+// @access  Public
+const getPublicAvailableUnits = async (req, res) => {
+  try {
+    const [units] = await pool.query(
+      `SELECT id, block_name, floor_number, unit_number, type, status 
+       FROM units 
+       ORDER BY block_name ASC, floor_number ASC, unit_number ASC`
+    );
+
+    const blocks = Array.from(new Set(units.map(u => u.block_name))).filter(Boolean);
+
+    return res.status(200).json({
+      blocks: blocks.length > 0 ? blocks : ['Block A', 'Block B', 'Block C', 'Block D'],
+      units
+    });
+  } catch (error) {
+    console.error('Get available units error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 // @desc    Get admin dashboard stats and metrics
 // @route   GET /api/auth/admin-dashboard-stats
 // @access  Private (Admin / Staff)
@@ -908,6 +931,74 @@ const deleteUser = async (req, res) => {
   }
 };
 
+// @desc    Admin edit/update user details
+// @route   PUT /api/auth/users/:id
+// @access  Private (Admin / Staff)
+const adminUpdateUser = async (req, res) => {
+  const { role: requesterRole } = req.user;
+  if (requesterRole !== 'admin' && requesterRole !== 'staff') {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+
+  const { id } = req.params;
+  const { 
+    full_name, 
+    email, 
+    role, 
+    status, 
+    building_name, 
+    unit_number, 
+    phone_number, 
+    vehicle_number, 
+    nic_or_passport 
+  } = req.body;
+
+  try {
+    const [target] = await pool.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (target.length === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (email) {
+      const [existing] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+      if (existing.length > 0) {
+        return res.status(400).json({ message: 'Email address is already in use.' });
+      }
+    }
+
+    await pool.query(
+      `UPDATE users SET 
+        full_name = ?, 
+        email = COALESCE(?, email), 
+        role = COALESCE(?, role), 
+        status = COALESCE(?, status), 
+        building_name = ?, 
+        unit_number = ?, 
+        phone_number = ?, 
+        vehicle_number = ?, 
+        nic_or_passport = ? 
+       WHERE id = ?`,
+      [
+        full_name !== undefined ? full_name : null,
+        email || null,
+        role || null,
+        status || null,
+        building_name !== undefined ? building_name : null,
+        unit_number !== undefined ? unit_number : null,
+        phone_number !== undefined ? phone_number : null,
+        vehicle_number !== undefined ? vehicle_number : null,
+        nic_or_passport !== undefined ? nic_or_passport : null,
+        id
+      ]
+    );
+
+    return res.status(200).json({ message: 'User details updated successfully.' });
+  } catch (error) {
+    console.error('Admin update user error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -921,5 +1012,8 @@ module.exports = {
   getAllUsers,
   adminCreateUser,
   updateUserStatus,
-  deleteUser
+  deleteUser,
+  adminUpdateUser,
+  getPublicAvailableUnits
 };
+

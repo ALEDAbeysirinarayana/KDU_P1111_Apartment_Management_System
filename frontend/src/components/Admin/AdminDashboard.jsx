@@ -4,7 +4,7 @@ import {
   Users, Building, FileText, Compass, Bell, Check, X, Plus, Trash2, 
   ShieldAlert, LayoutDashboard, Search, Settings, LogOut, Loader2, 
   Megaphone, Calendar, ClipboardList, Shield, ShieldAlert as AlertIcon, CreditCard, ChevronDown,
-  Clock, CheckCircle
+  Clock, CheckCircle, Eye, Edit
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -32,6 +32,20 @@ export default function AdminDashboard() {
     building_name: '',
     unit_number: '',
     vehicle_number: ''
+  });
+  const [selectedUserView, setSelectedUserView] = useState(null);
+  const [selectedUserEdit, setSelectedUserEdit] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    id: '',
+    full_name: '',
+    email: '',
+    role: 'homeowner',
+    status: 'approved',
+    building_name: '',
+    unit_number: '',
+    phone_number: '',
+    vehicle_number: '',
+    nic_or_passport: ''
   });
 
   // Resident Management State
@@ -407,6 +421,21 @@ export default function AdminDashboard() {
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
       setErrorMsg(error.response?.data?.message || 'Failed to create user');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
+  const handleAdminUpdateUser = async (e) => {
+    e.preventDefault();
+    if (!selectedUserEdit) return;
+    try {
+      await api.put(`/auth/users/${editUserForm.id}`, editUserForm);
+      setSuccessMsg("User details updated successfully!");
+      setSelectedUserEdit(null);
+      fetchData();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (error) {
+      setErrorMsg(error.response?.data?.message || 'Failed to update user details');
       setTimeout(() => setErrorMsg(''), 4000);
     }
   };
@@ -1623,7 +1652,9 @@ export default function AdminDashboard() {
                               </td>
                               <td className="py-3 capitalize font-semibold">{u.role}</td>
                               <td className="py-3 font-bold text-slate-700">
-                                {u.building_name && u.unit_number ? `${u.building_name}-${u.unit_number}` : u.unit_number || '—'}
+                                {u.building_name && u.unit_number 
+                                  ? `${u.building_name} - ${u.unit_number}` 
+                                  : u.unit_number || u.building_name || '—'}
                               </td>
                               <td className="py-3 font-medium">{u.email}</td>
                               <td className="py-3">
@@ -1635,32 +1666,64 @@ export default function AdminDashboard() {
                                   {u.status === 'approved' ? 'ACTIVE' : u.status}
                                 </span>
                               </td>
-                              <td className="py-3 text-right pr-6 space-x-2">
-                                {u.status !== 'approved' && (
+                              <td className="py-3 text-right pr-6">
+                                <div className="flex items-center justify-end gap-1.5">
                                   <button
-                                    onClick={() => handleUpdateStatus(u.id, 'approved')}
-                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                    title="Activate/Approve Account"
+                                    onClick={() => setSelectedUserView(u)}
+                                    className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/50 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
+                                    title="View Details"
                                   >
-                                    Activate
+                                    <Eye className="w-3 h-3" />
+                                    View
                                   </button>
-                                )}
-                                {u.status === 'approved' && (
                                   <button
-                                    onClick={() => handleUpdateStatus(u.id, 'suspended')}
-                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                    title="Suspend Account"
+                                    onClick={() => {
+                                      setSelectedUserEdit(u);
+                                      setEditUserForm({
+                                        id: u.id,
+                                        full_name: u.full_name || '',
+                                        email: u.email || '',
+                                        role: u.role || 'homeowner',
+                                        status: u.status || 'approved',
+                                        building_name: u.building_name || '',
+                                        unit_number: u.unit_number || '',
+                                        phone_number: u.phone_number || '',
+                                        vehicle_number: u.vehicle_number || '',
+                                        nic_or_passport: u.nic_or_passport || ''
+                                      });
+                                    }}
+                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/50 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
+                                    title="Edit Details"
                                   >
-                                    Suspend
+                                    <Edit className="w-3 h-3" />
+                                    Edit
                                   </button>
-                                )}
-                                <button
-                                  onClick={() => handleDeleteUser(u.id)}
-                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                  title="Delete User"
-                                >
-                                  Delete
-                                </button>
+                                  {u.status !== 'approved' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(u.id, 'approved')}
+                                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                      title="Activate/Approve Account"
+                                    >
+                                      Activate
+                                    </button>
+                                  )}
+                                  {u.status === 'approved' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(u.id, 'suspended')}
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                      title="Suspend Account"
+                                    >
+                                      Suspend
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                    title="Delete User"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -1932,8 +1995,8 @@ export default function AdminDashboard() {
                                     <span className="text-[10px] text-slate-400 font-semibold uppercase">{r.role}</span>
                                   </div>
                                 </td>
-                                <td className="py-3.5 font-extrabold text-slate-700">{r.unit_number || 'A-204'}</td>
-                                <td className="py-3.5 font-medium">{r.building_name || 'Block A'}</td>
+                                <td className="py-3.5 font-extrabold text-slate-700">{r.unit_number || '—'}</td>
+                                <td className="py-3.5 font-medium">{r.building_name || 'Unassigned'}</td>
                                 <td className="py-3.5">
                                   <span className="block font-medium text-slate-700">{r.email}</span>
                                   <span className="text-[10px] text-slate-400 font-semibold">{r.phone_number || '+1 234 567 890'}</span>
@@ -6144,6 +6207,226 @@ export default function AdminDashboard() {
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button type="button" onClick={() => { setShowRecordPaymentModal(false); setRecordPaymentForm({ billId: '', payment_method: 'Bank Transfer', notes: '' }); }} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition">Cancel</button>
                 <button type="submit" className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm">Record Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View User Modal */}
+      {selectedUserView && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">User Account Details</h3>
+              <button onClick={() => setSelectedUserView(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-150">
+              <div className="w-12 h-12 rounded-full bg-blue-600 text-white font-extrabold text-lg flex items-center justify-center uppercase shrink-0">
+                {selectedUserView.full_name ? selectedUserView.full_name.charAt(0) : selectedUserView.email.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-slate-900 text-sm truncate">{selectedUserView.full_name || 'N/A'}</h4>
+                <p className="text-xs text-slate-500 font-medium truncate">{selectedUserView.email}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                    {selectedUserView.role}
+                  </span>
+                  <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                    selectedUserView.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {selectedUserView.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Building / Block</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">{selectedUserView.building_name || '—'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Unit Number</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">{selectedUserView.unit_number || '—'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Phone Number</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">{selectedUserView.phone_number || '—'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Vehicle Number</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">{selectedUserView.vehicle_number || '—'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">NIC / Passport</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">{selectedUserView.nic_or_passport || '—'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Registration Date</span>
+                <span className="font-bold text-slate-800 mt-0.5 block">
+                  {selectedUserView.created_at ? new Date(selectedUserView.created_at).toLocaleDateString() : '—'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setSelectedUserView(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg cursor-pointer transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {selectedUserEdit && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Edit User Details</h3>
+              <button onClick={() => setSelectedUserEdit(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminUpdateUser} className="space-y-4 font-sans text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.full_name}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.email}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">User Role</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editUserForm.role}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, role: e.target.value })}
+                    >
+                      <option value="homeowner">Homeowner</option>
+                      <option value="tenant">Tenant</option>
+                      <option value="admin">Admin</option>
+                      <option value="staff">Staff</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Account Status</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={editUserForm.status}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, status: e.target.value })}
+                    >
+                      <option value="approved">Approved / Active</option>
+                      <option value="pending">Pending</option>
+                      <option value="suspended">Suspended</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Building / Block Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Block A"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.building_name}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, building_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Unit Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 101"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.unit_number}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, unit_number: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    placeholder="+1 234 567 890"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.phone_number}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, phone_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Vehicle Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WP CAB-1234"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.vehicle_number}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, vehicle_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">NIC / Passport</label>
+                  <input
+                    type="text"
+                    placeholder="NIC or Passport No."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white outline-none rounded-lg text-xs font-medium"
+                    value={editUserForm.nic_or_passport}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, nic_or_passport: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserEdit(null)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                >
+                  Save Changes
+                </button>
               </div>
             </form>
           </div>

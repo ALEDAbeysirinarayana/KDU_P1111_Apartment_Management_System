@@ -189,6 +189,11 @@ const allocateUnit = async (req, res) => {
     }
 
     // 5. Update unit
+    const prevOwnerId = unitExists[0].owner_id;
+    const prevTenantId = unitExists[0].tenant_id;
+    const blockName = unitExists[0].block_name;
+    const unitNumber = unitExists[0].unit_number;
+
     const finalOwnerId = owner_id || null;
     const finalTenantId = tenant_id || null;
     const finalParkingSlotId = parking_slot_id || null;
@@ -208,7 +213,37 @@ const allocateUnit = async (req, res) => {
       await pool.query('UPDATE users SET owner_id = ? WHERE id = ?', [finalOwnerId, finalTenantId]);
     }
 
-    // 7. Update parking_management slot link
+    // 7. Sync newly assigned owner's building_name and unit_number in users table
+    if (finalOwnerId) {
+      await pool.query('UPDATE users SET building_name = ?, unit_number = ? WHERE id = ?', [blockName, unitNumber, finalOwnerId]);
+    }
+
+    // 8. Sync newly assigned tenant's building_name and unit_number in users table
+    if (finalTenantId) {
+      await pool.query('UPDATE users SET building_name = ?, unit_number = ? WHERE id = ?', [blockName, unitNumber, finalTenantId]);
+    }
+
+    // 9. If previous owner was unassigned or replaced, update old owner's record
+    if (prevOwnerId && prevOwnerId !== finalOwnerId) {
+      const [otherUnit] = await pool.query('SELECT block_name, unit_number FROM units WHERE (owner_id = ? OR tenant_id = ?) AND id != ? LIMIT 1', [prevOwnerId, prevOwnerId, id]);
+      if (otherUnit.length > 0) {
+        await pool.query('UPDATE users SET building_name = ?, unit_number = ? WHERE id = ?', [otherUnit[0].block_name, otherUnit[0].unit_number, prevOwnerId]);
+      } else {
+        await pool.query('UPDATE users SET building_name = NULL, unit_number = NULL WHERE id = ?', [prevOwnerId]);
+      }
+    }
+
+    // 10. If previous tenant was unassigned or replaced, update old tenant's record
+    if (prevTenantId && prevTenantId !== finalTenantId) {
+      const [otherUnit] = await pool.query('SELECT block_name, unit_number FROM units WHERE (owner_id = ? OR tenant_id = ?) AND id != ? LIMIT 1', [prevTenantId, prevTenantId, id]);
+      if (otherUnit.length > 0) {
+        await pool.query('UPDATE users SET building_name = ?, unit_number = ? WHERE id = ?', [otherUnit[0].block_name, otherUnit[0].unit_number, prevTenantId]);
+      } else {
+        await pool.query('UPDATE users SET building_name = NULL, unit_number = NULL WHERE id = ?', [prevTenantId]);
+      }
+    }
+
+    // 11. Update parking_management slot link
     // First, clear old parking slot association for this unit
     await pool.query('UPDATE parking_management SET unit_id = NULL WHERE unit_id = ? AND type = "permanent"', [id]);
     
@@ -267,6 +302,13 @@ const getMyUnit = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
+// Automatically sync unit allocation data into users table
+pool.query(`
+  UPDATE users u
+  JOIN units un ON (un.owner_id = u.id OR un.tenant_id = u.id)
+  SET u.building_name = un.block_name, u.unit_number = un.unit_number
+`).catch((err) => console.error('Initial user-unit sync error:', err.message));
 
 module.exports = {
   getUnits,
