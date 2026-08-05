@@ -74,7 +74,7 @@ const STAFF_RBAC = {
   bills: {
     junior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true },
     senior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true },
-    staff_admin:    { view: true,  add: false, edit: true,  delete: true,  restricted: false },
+    staff_admin:    { view: true,  add: false, edit: true,  delete: false, restricted: false },
     junior_manager: { view: false, add: false, edit: false, delete: false, restricted: true },
     senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false },
   },
