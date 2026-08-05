@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Credentials from './pages/Credentials';
 import NotFound from './pages/NotFound';
+import AIChatbot from './components/AIChatbot';
 import './App.css';
 
 // Route Guard to protect private pages
@@ -88,6 +89,9 @@ function App() {
           {/* Fallback Not Found Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+
+        {/* Smart AI Assistant Chatbot (Always Fixed at Bottom-Left Corner) */}
+        <AIChatbot />
       </Router>
     </AuthProvider>
   );
