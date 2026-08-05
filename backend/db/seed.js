@@ -475,6 +475,74 @@ async function runSeed() {
       console.log('  Notices seeded.');
     }
 
+    // 10. Seed Complaints & Maintenance Requests (20 records)
+    console.log('Seeding complaints & maintenance requests...');
+    const [compCount] = await pool.query('SELECT COUNT(*) AS count FROM complaints');
+    if (compCount[0].count === 0) {
+
+      // Resolve user IDs we need for complaint submissions
+      const adminId       = insertedUsersByEmail['admin@apartment.com'];
+      const staffId       = insertedUsersByEmail['staff@apartment.com'];
+      const staffSarahId  = insertedUsersByEmail['staff.sarah@apartment.com'];
+      const maintAlexId   = insertedUsersByEmail['maint.alex@apartment.com'];
+      const maintChiefId  = insertedUsersByEmail['maintenance@apartment.com'];
+
+      // Resident IDs (homeowners & tenants who submit complaints)
+      const r1  = insertedUsersByEmail['homeowner@apartment.com'];       // A01 owner
+      const r2  = insertedUsersByEmail['owner.smith@apartment.com'];     // A02 owner
+      const r3  = insertedUsersByEmail['owner.johnson@apartment.com'];   // A03 owner
+      const r4  = insertedUsersByEmail['owner.williams@apartment.com'];  // A04 owner
+      const r5  = insertedUsersByEmail['owner.brown@apartment.com'];     // B01 owner
+      const r6  = insertedUsersByEmail['owner.jones@apartment.com'];     // B02 owner
+      const r7  = insertedUsersByEmail['owner.garcia@apartment.com'];    // B03 owner
+      const r8  = insertedUsersByEmail['owner.miller@apartment.com'];    // B04 owner
+      const r9  = insertedUsersByEmail['owner.davis@apartment.com'];     // C01 owner
+      const r10 = insertedUsersByEmail['owner.rodriguez@apartment.com']; // C02 owner
+      const r11 = insertedUsersByEmail['owner.martinez@apartment.com'];  // C03 owner
+      const r12 = insertedUsersByEmail['owner.hernandez@apartment.com']; // C04 owner
+      const t1  = insertedUsersByEmail['tenant.wilson@apartment.com'];   // A01 tenant
+      const t2  = insertedUsersByEmail['tenant.anderson@apartment.com']; // A02 tenant
+      const t3  = insertedUsersByEmail['tenant.taylor@apartment.com'];   // A03 tenant
+      const t4  = insertedUsersByEmail['tenant.thomas@apartment.com'];   // B01 tenant
+      const t5  = insertedUsersByEmail['tenant.white@apartment.com'];    // B02 tenant
+      const t6  = insertedUsersByEmail['tenant.harris@apartment.com'];   // C01 tenant
+      const t7  = insertedUsersByEmail['tenant.martin@apartment.com'];   // C02 tenant
+
+      // Helper – insert one complaint row
+      const insertComplaint = (userId, category, subjectTitle, description, priority, status, assignedStaffId, createdAt) =>
+        pool.query(
+          `INSERT INTO complaints (user_id, category, subject_title, description, priority, status, assigned_staff_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [userId, category, subjectTitle, description, priority, status, assignedStaffId || null, createdAt]
+        );
+
+      // ── 20 Seed Complaints ──────────────────────────────────────────────────
+      await insertComplaint(r1,  'Plumbing',       'Burst Pipe in Bathroom',          'There is a burst pipe under the sink in the main bathroom causing water to flood the floor.', 'emergency', 'emergency',   maintAlexId,  '2026-07-01 08:15:00');
+      await insertComplaint(t1,  'Electrical',     'Power Outage in Unit A01',         'The entire unit lost power after the last storm. Circuit breaker keeps tripping when reset.',  'high',      'in_progress', maintChiefId, '2026-07-03 10:30:00');
+      await insertComplaint(r2,  'Elevator',       'Elevator Making Grinding Noise',   'The Block A elevator makes a loud grinding noise and shudders between floors 2 and 3.',       'high',      'in_progress', staffId,      '2026-07-05 14:00:00');
+      await insertComplaint(t2,  'Noise',          'Late Night Noise from Neighbours', 'Loud music and parties every weekend past midnight from the unit directly above A02.',         'medium',    'pending',     null,         '2026-07-07 22:45:00');
+      await insertComplaint(r3,  'Plumbing',       'Slow Draining Shower',            'Shower in master bathroom drains very slowly and causes standing water after 5 minutes.',      'low',       'resolved',    maintAlexId,  '2026-06-20 09:00:00');
+      await insertComplaint(t3,  'HVAC',           'Air Conditioner Not Cooling',      'The split AC unit in the bedroom stopped producing cold air. Only blows warm air at full power.', 'high',   'resolved',    maintChiefId, '2026-06-22 13:30:00');
+      await insertComplaint(r4,  'Security',       'Main Entrance Door Lock Broken',   'The electronic lock on the Block A main entrance does not latch properly. Anyone can push it open.', 'emergency', 'in_progress', staffSarahId, '2026-07-10 07:00:00');
+      await insertComplaint(t4,  'Cleanliness',   'Garbage Chute Blocked on Floor 2', 'Garbage chute on floor 2 Block B is blocked causing odour and overflow onto the corridor.',  'medium',    'in_progress', staffSarahId, '2026-07-12 11:00:00');
+      await insertComplaint(r5,  'Electrical',     'Corridor Lights Flickering',       'The hallway lights on floors 1 and 2 of Block B flicker constantly and turn off randomly.',   'medium',    'pending',     null,         '2026-07-14 16:20:00');
+      await insertComplaint(r6,  'Plumbing',       'Water Pressure Too Low',           'Water pressure in Block B unit B02 is critically low, making showers nearly impossible.',     'medium',    'resolved',    maintAlexId,  '2026-06-28 08:45:00');
+      await insertComplaint(t5,  'Pest Control',   'Cockroach Infestation in Kitchen', 'Large number of cockroaches seen in the kitchen and bathroom, likely from neighbouring units.', 'high',   'pending',     null,         '2026-07-15 19:00:00');
+      await insertComplaint(r7,  'Structural',     'Ceiling Crack in Living Room',     'A visible crack has appeared across the living room ceiling stretching approximately 60 cm.',   'high',    'in_progress', maintChiefId, '2026-07-08 10:00:00');
+      await insertComplaint(r8,  'HVAC',           'Ventilation Fan Not Working',      'The ventilation fan in the bathroom stopped working. There is now mould forming on the ceiling.', 'medium', 'resolved',  maintAlexId,  '2026-07-01 12:00:00');
+      await insertComplaint(t6,  'Parking',        'Unauthorized Vehicle in My Slot',  'An unknown vehicle (plate WP-XYZ-9999) has been parked in my reserved slot P-C01 for 3 days.', 'medium', 'resolved',  staffId,      '2026-07-11 08:30:00');
+      await insertComplaint(r9,  'Electrical',     'Power Socket Sparking',            'The power outlet near the kitchen counter in unit C01 is sparking when appliances are plugged in.', 'emergency', 'emergency', maintChiefId, '2026-07-16 06:50:00');
+      await insertComplaint(t7,  'Noise',          'Construction Noise on Weekends',    'Loud drilling and hammering from a renovation in C05 continues on weekends from 7 AM.',        'low',       'pending',     null,         '2026-07-18 07:30:00');
+      await insertComplaint(r10, 'Cleanliness',   'Swimming Pool Area Dirty',         'The pool area has not been cleaned for over a week. There is debris floating in the pool.',    'medium',    'in_progress', staffSarahId, '2026-07-17 09:00:00');
+      await insertComplaint(r11, 'Internet',       'Common Area WiFi Down',            'The shared WiFi in the lobby and business center has been down for 48 hours with no response.', 'low',      'pending',     null,         '2026-07-19 14:00:00');
+      await insertComplaint(r12, 'Structural',     'Balcony Railing Loose',            'The metal railing on the balcony of unit C04 is loose and wobbles. It is a safety hazard.',   'high',      'in_progress', maintChiefId, '2026-07-13 15:45:00');
+      await insertComplaint(t1,  'Lift',           'Lift Doors Not Closing Properly',  'The Block A lift doors take over 30 seconds to close and sometimes reopen without being triggered.', 'medium', 'resolved', maintAlexId, '2026-07-06 17:00:00');
+
+      console.log('  20 complaints & maintenance requests seeded.');
+    } else {
+      console.log(`  Skipped complaints seeding (${compCount[0].count} records already exist).`);
+    }
+
     console.log('\n✅ Database migration and seeding completed successfully!');
     await pool.end();
     process.exit(0);
