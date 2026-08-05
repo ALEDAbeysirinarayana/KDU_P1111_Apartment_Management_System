@@ -4,9 +4,113 @@ import {
   Users, Building, FileText, Compass, Bell, Check, X, Plus, Trash2, 
   ShieldAlert, LayoutDashboard, Search, Settings, LogOut, Loader2, 
   Megaphone, Calendar, ClipboardList, Shield, ShieldAlert as AlertIcon, CreditCard, ChevronDown,
-  Clock, CheckCircle, Eye, Edit, TrendingUp
+  Clock, CheckCircle, Eye, Edit, TrendingUp, Lock
 } from 'lucide-react';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF RBAC CONFIGURATION
+// ─────────────────────────────────────────────────────────────────────────────
+const SUB_ROLE_LABELS = {
+  junior_staff:    'Junior Staff',
+  senior_staff:    'Senior Staff',
+  staff_admin:     'Staff Admin',
+  junior_manager:  'Junior Manager',
+  senior_manager:  'Senior Manager',
+};
+
+// per page: { view, add, edit, delete, restricted }
+// 'canAddAdmin' false = cannot add admin-role users
+const STAFF_RBAC = {
+  // page key        junior_staff        senior_staff        staff_admin                    junior_manager               senior_manager
+  users:     {
+    junior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false, canAddAdmin: false, canApprove: false, canReject: false },
+    senior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false, canAddAdmin: false, canApprove: false, canReject: false },
+    staff_admin:    { view: true,  add: true,  edit: false, delete: false, restricted: false, canAddAdmin: false, canApprove: true,  canReject: false },
+    junior_manager: { view: true,  add: true,  edit: false, delete: false, restricted: false, canAddAdmin: false, canApprove: false, canReject: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false, canAddAdmin: false, canApprove: true,  canReject: true },
+  },
+  residents: {
+    junior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false },
+    senior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false },
+    staff_admin:    { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    junior_manager: { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false },
+  },
+  units: {
+    junior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true,  canAllocate: false },
+    senior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false, canAllocate: false },
+    staff_admin:    { view: true,  add: false, edit: false, delete: false, restricted: false, canAllocate: true },
+    junior_manager: { view: true,  add: false, edit: false, delete: false, restricted: false, canAllocate: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false, canAllocate: true },
+  },
+  complaints: {
+    junior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true },
+    senior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false },
+    staff_admin:    { view: true,  add: false, edit: false, delete: false, restricted: false },
+    junior_manager: { view: true,  add: false, edit: false, delete: false, restricted: false },
+    senior_manager: { view: true,  add: false, edit: true,  delete: false, restricted: false },
+  },
+  facility: {
+    junior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true,  canAllocateParking: false },
+    senior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false, canAllocateParking: false },
+    staff_admin:    { view: true,  add: true,  edit: false, delete: false, restricted: false, canAllocateParking: true },
+    junior_manager: { view: true,  add: false, edit: false, delete: false, restricted: false, canAllocateParking: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false, canAllocateParking: true },
+  },
+  events: {
+    junior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false },
+    senior_staff:   { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    staff_admin:    { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    junior_manager: { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false },
+  },
+  notices: {
+    junior_staff:   { view: true,  add: false, edit: false, delete: false, restricted: false },
+    senior_staff:   { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    staff_admin:    { view: true,  add: true,  edit: true,  delete: false, restricted: false },
+    junior_manager: { view: true,  add: true,  edit: false, delete: false, restricted: false },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false },
+  },
+  bills: {
+    junior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true },
+    senior_staff:   { view: false, add: false, edit: false, delete: false, restricted: true },
+    staff_admin:    { view: true,  add: false, edit: true,  delete: true,  restricted: false },
+    junior_manager: { view: false, add: false, edit: false, delete: false, restricted: true },
+    senior_manager: { view: true,  add: true,  edit: true,  delete: false, restricted: false },
+  },
+};
+
+/**
+ * Returns RBAC permissions for the current user on a given page.
+ * For admin users, everything is allowed. For staff with no sub_role, view-only.
+ */
+const getRbac = (user, page) => {
+  const defaults = { view: false, add: false, edit: false, delete: false, restricted: true, canAddAdmin: false, canApprove: false, canReject: false, canAllocate: false, canAllocateParking: false };
+  if (!user) return defaults;
+  if (user.role === 'admin') return { view: true, add: true, edit: true, delete: true, restricted: false, canAddAdmin: true, canApprove: true, canReject: true, canAllocate: true, canAllocateParking: true };
+  if (user.role !== 'staff') return { view: true, add: true, edit: true, delete: true, restricted: false, canAddAdmin: false, canApprove: true, canReject: true, canAllocate: true, canAllocateParking: true };
+  const sub = user.sub_role;
+  if (!sub || !STAFF_RBAC[page]?.[sub]) return { ...defaults, view: true, restricted: false };
+  return { ...defaults, ...STAFF_RBAC[page][sub] };
+};
+
+
+/** Renders a full-page restriction banner for blocked pages */
+const PageRestrictedBanner = ({ pageName, user }) => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
+    <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
+      <Lock className="w-8 h-8 text-red-400" />
+    </div>
+    <h2 className="text-lg font-black text-slate-800 mb-2">Access Restricted</h2>
+    <p className="text-sm text-slate-500 font-medium max-w-sm">
+      You don't have permission to view the <span className="font-bold text-slate-700">{pageName}</span> page.
+      Contact your system administrator to request access.
+    </p>
+    <div className="mt-4 px-4 py-2 bg-red-50 border border-red-200 rounded-xl">
+      <p className="text-xs font-bold text-red-600">Your role: {SUB_ROLE_LABELS[user?.sub_role] || user?.role}</p>
+    </div>
+  </div>
+);
 
 export default function AdminDashboard() {
   const { api, user, logout } = useAuth();
@@ -27,6 +131,7 @@ export default function AdminDashboard() {
     email: '',
     password: '',
     role: 'homeowner',
+    sub_role: '',
     status: 'approved',
     full_name: '',
     phone_number: '',
@@ -411,6 +516,7 @@ export default function AdminDashboard() {
         email: '',
         password: '',
         role: 'homeowner',
+        sub_role: '',
         status: 'approved',
         full_name: '',
         phone_number: '',
@@ -934,10 +1040,17 @@ export default function AdminDashboard() {
   };
 
   // Helper values for display
-  const adminDisplayName = user?.email 
-    ? user.email.split('@')[0].split(/[._-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
-    : 'Alexander Pierce';
-  const adminRoleLabel = user?.role === 'admin' ? 'Super Admin' : 'Staff Admin';
+  const adminDisplayName = user?.full_name
+    || (user?.email
+      ? user.email.split('@')[0].split(/[._-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      : 'Administrator');
+  const adminRoleLabel = user?.role === 'admin'
+    ? 'Super Admin'
+    : user?.role === 'staff' && user?.sub_role
+      ? (SUB_ROLE_LABELS[user.sub_role] || 'Staff')
+      : user?.role === 'staff'
+        ? 'Staff'
+        : 'Maintenance';
   const metrics = dashboardStats?.metrics || {
     totalUnits: 0,
     occupiedUnits: 0,
@@ -1008,7 +1121,15 @@ export default function AdminDashboard() {
             </div>
             <div>
               <h4 className="text-xs font-bold text-slate-800 tracking-tight">{adminDisplayName}</h4>
-              <p className="text-[10px] text-slate-400 font-semibold">{adminRoleLabel}</p>
+              <p className="text-[10px] text-slate-400 font-semibold">
+                {user?.role === 'admin' ? 'Super Admin' : user?.role === 'staff' ? 'Staff' : 'Maintenance'}
+              </p>
+              {/* Sub-role badge for staff */}
+              {user?.role === 'staff' && user?.sub_role && (
+                <span className="inline-block text-[8px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md mt-0.5">
+                  {SUB_ROLE_LABELS[user.sub_role] || user.sub_role}
+                </span>
+              )}
             </div>
           </div>
           <button 
@@ -1105,7 +1226,7 @@ export default function AdminDashboard() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-4">
-            {activeTab === 'approvals' && (
+            {activeTab === 'approvals' && getRbac(user, 'users').add && (
               <button 
                 onClick={() => setShowAddUserModal(true)}
                 className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
@@ -1125,17 +1246,19 @@ export default function AdminDashboard() {
                 >
                   Export
                 </button>
-                <button 
-                  onClick={() => setShowAddResidentModal(true)}
-                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Resident</span>
-                </button>
+                {getRbac(user, 'residents').add && (
+                  <button 
+                    onClick={() => setShowAddResidentModal(true)}
+                    className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add New Resident</span>
+                  </button>
+                )}
               </div>
             )}
 
-            {activeTab === 'units' && (
+            {activeTab === 'units' && !getRbac(user, 'units').restricted && (
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => {
@@ -1145,17 +1268,19 @@ export default function AdminDashboard() {
                 >
                   Export
                 </button>
-                <button 
-                  onClick={() => setShowAddUnitModal(true)}
-                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Unit</span>
-                </button>
+                {getRbac(user, 'units').add && (
+                  <button 
+                    onClick={() => setShowAddUnitModal(true)}
+                    className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add New Unit</span>
+                  </button>
+                )}
               </div>
             )}
 
-            {activeTab === 'facility' && (
+            {activeTab === 'facility' && !getRbac(user, 'facility').restricted && (
               <div className="flex items-center gap-2 animate-in fade-in duration-200">
                 <button 
                   onClick={() => setShowBookingRequestsModal(true)}
@@ -1164,13 +1289,15 @@ export default function AdminDashboard() {
                   <Calendar className="w-3.5 h-3.5 text-slate-500" />
                   <span>View Booking Requests</span>
                 </button>
-                <button 
-                  onClick={() => setShowAddFacilityModal(true)}
-                  className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Facility</span>
-                </button>
+                {getRbac(user, 'facility').add && (
+                  <button 
+                    onClick={() => setShowAddFacilityModal(true)}
+                    className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add New Facility</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -1187,7 +1314,7 @@ export default function AdminDashboard() {
               </button>
             )}
 
-            {activeTab === 'events' && (
+            {activeTab === 'events' && getRbac(user, 'events').add && (
               <button 
                 onClick={() => setShowAddEventModal(true)}
                 className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm animate-in fade-in duration-200"
@@ -1197,7 +1324,7 @@ export default function AdminDashboard() {
               </button>
             )}
 
-            {activeTab === 'notices' && (
+            {activeTab === 'notices' && getRbac(user, 'notices').add && (
               <button 
                 onClick={() => setShowAddNoticeModal(true)}
                 className="py-1.5 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-sm animate-in fade-in duration-200"
@@ -1686,53 +1813,57 @@ export default function AdminDashboard() {
                                     <Eye className="w-3 h-3" />
                                     View
                                   </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedUserEdit(u);
-                                      setEditUserForm({
-                                        id: u.id,
-                                        full_name: u.full_name || '',
-                                        email: u.email || '',
-                                        role: u.role || 'homeowner',
-                                        status: u.status || 'approved',
-                                        building_name: u.building_name || '',
-                                        unit_number: u.unit_number || '',
-                                        phone_number: u.phone_number || '',
-                                        vehicle_number: u.vehicle_number || '',
-                                        nic_or_passport: u.nic_or_passport || ''
-                                      });
-                                    }}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/50 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
-                                    title="Edit Details"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    Edit
-                                  </button>
-                                  {u.status !== 'approved' && (
-                                    <button
-                                      onClick={() => handleUpdateStatus(u.id, 'approved')}
-                                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                      title="Activate/Approve Account"
-                                    >
-                                      Activate
-                                    </button>
+                                  {getRbac(user, 'users').edit && !(u.role === 'admin' && user?.role !== 'admin') && (
+                                   <button
+                                     onClick={() => {
+                                       setSelectedUserEdit(u);
+                                       setEditUserForm({
+                                         id: u.id,
+                                         full_name: u.full_name || '',
+                                         email: u.email || '',
+                                         role: u.role || 'homeowner',
+                                         status: u.status || 'approved',
+                                         building_name: u.building_name || '',
+                                         unit_number: u.unit_number || '',
+                                         phone_number: u.phone_number || '',
+                                         vehicle_number: u.vehicle_number || '',
+                                         nic_or_passport: u.nic_or_passport || ''
+                                       });
+                                     }}
+                                     className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200/50 text-[10px] font-bold rounded cursor-pointer transition flex items-center gap-1"
+                                     title="Edit Details"
+                                   >
+                                     <Edit className="w-3 h-3" />
+                                     Edit
+                                   </button>
                                   )}
-                                  {u.status === 'approved' && (
-                                    <button
-                                      onClick={() => handleUpdateStatus(u.id, 'suspended')}
-                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                      title="Suspend Account"
-                                    >
-                                      Suspend
-                                    </button>
+                                  {u.status !== 'approved' && getRbac(user, 'users').edit && (
+                                     <button
+                                       onClick={() => handleUpdateStatus(u.id, 'approved')}
+                                       className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                       title="Activate/Approve Account"
+                                     >
+                                       Activate
+                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => handleDeleteUser(u.id)}
-                                    className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 text-[10px] font-bold rounded cursor-pointer transition"
-                                    title="Delete User"
-                                  >
-                                    Delete
-                                  </button>
+                                  {u.status === 'approved' && getRbac(user, 'users').edit && (
+                                     <button
+                                       onClick={() => handleUpdateStatus(u.id, 'suspended')}
+                                       className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                       title="Suspend Account"
+                                     >
+                                       Suspend
+                                     </button>
+                                  )}
+                                  {getRbac(user, 'users').delete && (
+                                   <button
+                                     onClick={() => handleDeleteUser(u.id)}
+                                     className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 text-[10px] font-bold rounded cursor-pointer transition"
+                                     title="Delete User"
+                                   >
+                                     Delete
+                                   </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1796,18 +1927,25 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleApproval(owner.id, 'approve')}
-                            className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
-                          >
-                            APPROVE
-                          </button>
-                          <button
-                            onClick={() => handleApproval(owner.id, 'reject')}
-                            className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
-                          >
-                            REJECT
-                          </button>
+                          {getRbac(user, 'users').canApprove && (
+                            <button
+                              onClick={() => handleApproval(owner.id, 'approve')}
+                              className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
+                            >
+                              APPROVE
+                            </button>
+                          )}
+                          {getRbac(user, 'users').canReject && (
+                            <button
+                              onClick={() => handleApproval(owner.id, 'reject')}
+                              className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
+                            >
+                              REJECT
+                            </button>
+                          )}
+                          {!getRbac(user, 'users').canApprove && !getRbac(user, 'users').canReject && (
+                            <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1827,18 +1965,25 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleApproval(tenant.id, 'approve')}
-                            className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
-                          >
-                            APPROVE
-                          </button>
-                          <button
-                            onClick={() => handleApproval(tenant.id, 'reject')}
-                            className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
-                          >
-                            REJECT
-                          </button>
+                          {getRbac(user, 'users').canApprove && (
+                            <button
+                              onClick={() => handleApproval(tenant.id, 'approve')}
+                              className="flex-1 py-1.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition text-center shadow-sm"
+                            >
+                              APPROVE
+                            </button>
+                          )}
+                          {getRbac(user, 'users').canReject && (
+                            <button
+                              onClick={() => handleApproval(tenant.id, 'reject')}
+                              className="flex-1 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer transition text-center"
+                            >
+                              REJECT
+                            </button>
+                          )}
+                          {!getRbac(user, 'users').canApprove && !getRbac(user, 'users').canReject && (
+                            <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -2134,32 +2279,36 @@ export default function AdminDashboard() {
 
                   {/* Action triggers */}
                   <div className="pt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditResidentForm({
-                          id: selectedResident.id,
-                          email: selectedResident.email,
-                          role: selectedResident.role,
-                          status: selectedResident.status,
-                          full_name: selectedResident.full_name || '',
-                          phone_number: selectedResident.phone_number || '',
-                          building_name: selectedResident.building_name || '',
-                          unit_number: selectedResident.unit_number || '',
-                          vehicle_number: selectedResident.vehicle_number || ''
-                        });
-                        setShowEditResidentModal(true);
-                      }}
-                      className="flex-1 py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                    >
-                      Edit Profile
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(selectedResident.id)}
-                      className="p-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-red-600 rounded-lg cursor-pointer transition"
-                      title="Remove Account"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {getRbac(user, 'residents').edit && (
+                      <button
+                        onClick={() => {
+                          setEditResidentForm({
+                            id: selectedResident.id,
+                            email: selectedResident.email,
+                            role: selectedResident.role,
+                            status: selectedResident.status,
+                            full_name: selectedResident.full_name || '',
+                            phone_number: selectedResident.phone_number || '',
+                            building_name: selectedResident.building_name || '',
+                            unit_number: selectedResident.unit_number || '',
+                            vehicle_number: selectedResident.vehicle_number || ''
+                          });
+                          setShowEditResidentModal(true);
+                        }}
+                        className="flex-1 py-2.5 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                      >
+                        Edit Profile
+                      </button>
+                    )}
+                    {getRbac(user, 'residents').delete && (
+                      <button
+                        onClick={() => handleDeleteUser(selectedResident.id)}
+                        className="p-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-red-600 rounded-lg cursor-pointer transition"
+                        title="Remove Account"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                 </div>
@@ -2170,6 +2319,9 @@ export default function AdminDashboard() {
 
           {/* 3.4 activeTab = UNITS (Unit & Inventory) */}
           {activeTab === 'units' && (
+            getRbac(user, 'units').restricted
+              ? <PageRestrictedBanner pageName="Unit & Inventory" user={user} />
+              :
             <div className="space-y-6">
               
               {/* Row 1 Metrics: Apartment units */}
@@ -2412,28 +2564,32 @@ export default function AdminDashboard() {
                               {u.parking_slot_number ? `Lot #${u.parking_slot_number}` : '—'}
                             </td>
                             <td className="py-3.5 text-right pr-6">
-                              <button
-                                onClick={() => {
-                                  setAllocation({
-                                    unitId: u.id,
-                                    owner_id: u.owner_id || '',
-                                    tenant_id: u.tenant_id || '',
-                                    parking_slot_id: u.parking_slot_id || '',
-                                    ownerLabel: u.owner_name ? `${u.owner_name} (${u.owner_email || ''})` : '',
-                                    tenantLabel: u.tenant_name ? `${u.tenant_name} (${u.tenant_email || ''})` : ''
-                                  });
-                                  setOwnerSearch(u.owner_name || '');
-                                  setTenantSearch(u.tenant_name || '');
-                                  setOwnerResults([]);
-                                  setTenantResults([]);
-                                  setShowOwnerDrop(false);
-                                  setShowTenantDrop(false);
-                                  setShowAllocateModal(true);
-                                }}
-                                className="px-2.5 py-1 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-bold rounded cursor-pointer transition"
-                              >
-                                Allocate Resources
-                              </button>
+                              {getRbac(user, 'units').canAllocate ? (
+                                <button
+                                  onClick={() => {
+                                    setAllocation({
+                                      unitId: u.id,
+                                      owner_id: u.owner_id || '',
+                                      tenant_id: u.tenant_id || '',
+                                      parking_slot_id: u.parking_slot_id || '',
+                                      ownerLabel: u.owner_name ? `${u.owner_name} (${u.owner_email || ''})` : '',
+                                      tenantLabel: u.tenant_name ? `${u.tenant_name} (${u.tenant_email || ''})` : ''
+                                    });
+                                    setOwnerSearch(u.owner_name || '');
+                                    setTenantSearch(u.tenant_name || '');
+                                    setOwnerResults([]);
+                                    setTenantResults([]);
+                                    setShowOwnerDrop(false);
+                                    setShowTenantDrop(false);
+                                    setShowAllocateModal(true);
+                                  }}
+                                  className="px-2.5 py-1 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-bold rounded cursor-pointer transition"
+                                >
+                                  Allocate Resources
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -2560,6 +2716,9 @@ export default function AdminDashboard() {
 
           {/* 3.5 activeTab = COMPLAINTS */}
           {activeTab === 'complaints' && (
+            getRbac(user, 'complaints').restricted
+              ? <PageRestrictedBanner pageName="Complaints" user={user} />
+              :
             <div className="space-y-6 animate-in fade-in duration-200">
               
               {/* Metrics cards row */}
@@ -3151,21 +3310,30 @@ export default function AdminDashboard() {
                               </div>
                             </td>
                             <td className="py-3 text-right pr-2 flex items-center justify-end gap-2.5">
-                              <button
-                                onClick={() => {
-                                  setEditFacilityForm(fac);
-                                  setShowEditFacilityModal(true);
-                                }}
-                                className="text-slate-400 hover:text-blue-700 cursor-pointer"
-                              >
-                                ✎
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFacility(fac.id)}
-                                className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                              >
-                                🗑
-                              </button>
+                              {getRbac(user, 'facility').edit && (
+                                <button
+                                  onClick={() => {
+                                    setEditFacilityForm(fac);
+                                    setShowEditFacilityModal(true);
+                                  }}
+                                  className="text-slate-400 hover:text-blue-700 cursor-pointer"
+                                  title="Edit Facility"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              {getRbac(user, 'facility').delete && (
+                                <button
+                                  onClick={() => handleDeleteFacility(fac.id)}
+                                  className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  title="Delete Facility"
+                                >
+                                  🗑
+                                </button>
+                              )}
+                              {!getRbac(user, 'facility').edit && !getRbac(user, 'facility').delete && (
+                                <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -3245,28 +3413,32 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td className="py-3.5 text-right pr-2 text-slate-400 font-extrabold text-sm select-none hover:text-slate-600 cursor-pointer">
-                                <button 
-                                  onClick={() => {
-                                    setAllocation({
-                                      unitId: slot.unit_id || '',
-                                      owner_id: '',
-                                      tenant_id: '',
-                                      parking_slot_id: slot.id,
-                                      ownerLabel: '',
-                                      tenantLabel: ''
-                                    });
-                                    setOwnerSearch('');
-                                    setTenantSearch('');
-                                    setOwnerResults([]);
-                                    setTenantResults([]);
-                                    setShowOwnerDrop(false);
-                                    setShowTenantDrop(false);
-                                    setShowAllocateModal(true);
-                                  }}
-                                  className="text-xs text-blue-700 hover:underline font-bold"
-                                >
-                                  Allocate Slot
-                                </button>
+                                {getRbac(user, 'facility').canAllocateParking ? (
+                                  <button 
+                                    onClick={() => {
+                                      setAllocation({
+                                        unitId: slot.unit_id || '',
+                                        owner_id: '',
+                                        tenant_id: '',
+                                        parking_slot_id: slot.id,
+                                        ownerLabel: '',
+                                        tenantLabel: ''
+                                      });
+                                      setOwnerSearch('');
+                                      setTenantSearch('');
+                                      setOwnerResults([]);
+                                      setTenantResults([]);
+                                      setShowOwnerDrop(false);
+                                      setShowTenantDrop(false);
+                                      setShowAllocateModal(true);
+                                    }}
+                                    className="text-xs text-blue-700 hover:underline font-bold"
+                                  >
+                                    Allocate Slot
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -3388,32 +3560,39 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td className="py-3 text-right pr-2">
-                                <div className="flex items-center justify-end gap-2.5">
-                                  <button 
-                                    onClick={() => {
-                                      setEditEventForm({
-                                        id: e.id,
-                                        name: e.name,
-                                        type: e.type,
-                                        date: e.date.substring(0, 10),
-                                        time: e.time,
-                                        location: e.location,
-                                        status: e.status
-                                      });
-                                      setShowEditEventModal(true);
-                                    }}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition font-bold"
-                                    title="Edit Event"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteEvent(e.id)}
-                                    className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition font-bold"
-                                    title="Delete Event"
-                                  >
-                                    🗑️
-                                  </button>
+                                <div className="flex justify-end gap-1.5">
+                                    {getRbac(user, 'events').edit && (
+                                      <button 
+                                        onClick={() => {
+                                          setEditEventForm({
+                                            id: e.id,
+                                            name: e.name,
+                                            type: e.type,
+                                            date: e.date.substring(0, 10),
+                                            time: e.time,
+                                            location: e.location,
+                                            status: e.status
+                                          });
+                                          setShowEditEventModal(true);
+                                        }}
+                                        className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition font-bold"
+                                        title="Edit Event"
+                                      >
+                                        ✏️
+                                      </button>
+                                    )}
+                                    {getRbac(user, 'events').delete && (
+                                      <button 
+                                        onClick={() => handleDeleteEvent(e.id)}
+                                        className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition font-bold"
+                                        title="Delete Event"
+                                      >
+                                        🗑️
+                                      </button>
+                                    )}
+                                    {!getRbac(user, 'events').edit && !getRbac(user, 'events').delete && (
+                                      <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                                    )}
                                 </div>
                               </td>
                             </tr>
@@ -3816,40 +3995,40 @@ export default function AdminDashboard() {
                                 </span>
                               </td>
                               <td className="py-3.5 text-right pr-2">
-                                <div className="flex items-center justify-end gap-2.5">
-                                  <button 
-                                    onClick={() => alert(`Announcement Details:\n\nID: ${n.notice_id || n.id}\nTitle: ${n.title}\nCategory: ${n.category}\nContent: ${n.content}\nAudience: ${n.audience}\nPriority: ${n.priority}`)}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition"
-                                    title="View Details"
-                                  >
-                                    👁️
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      setEditNoticeForm({
-                                        id: n.id,
-                                        title: n.title,
-                                        content: n.content,
-                                        category: n.category,
-                                        expiry_date: n.expiry_date ? n.expiry_date.substring(0, 10) : '',
-                                        priority: n.priority,
-                                        audience: n.audience,
-                                        status: n.status
-                                      });
-                                      setShowEditNoticeModal(true);
-                                    }}
-                                    className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition"
-                                    title="Edit Notice"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteNotice(n.id)}
-                                    className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition animate-in duration-200"
-                                    title="Delete Notice"
-                                  >
-                                    🗑️
-                                  </button>
+                                <div className="flex justify-end gap-1.5">
+                                  {getRbac(user, 'notices').edit && (
+                                    <button 
+                                      onClick={() => {
+                                        setEditNoticeForm({
+                                          id: n.id,
+                                          title: n.title,
+                                          content: n.content,
+                                          category: n.category,
+                                          expiry_date: n.expiry_date ? n.expiry_date.substring(0, 10) : '',
+                                          priority: n.priority,
+                                          audience: n.audience,
+                                          status: n.status
+                                        });
+                                        setShowEditNoticeModal(true);
+                                      }}
+                                      className="p-1 hover:bg-slate-100 rounded text-slate-500 hover:text-blue-700 transition"
+                                      title="Edit Notice"
+                                    >
+                                      ✏️
+                                    </button>
+                                  )}
+                                  {getRbac(user, 'notices').delete && (
+                                    <button 
+                                      onClick={() => handleDeleteNotice(n.id)}
+                                      className="p-1 hover:bg-red-55/10 rounded text-slate-500 hover:text-red-600 transition animate-in duration-200"
+                                      title="Delete Notice"
+                                    >
+                                      🗑️
+                                    </button>
+                                  )}
+                                  {!getRbac(user, 'notices').edit && !getRbac(user, 'notices').delete && (
+                                    <span className="text-[10px] text-slate-400 font-semibold italic">View Only</span>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -3972,6 +4151,9 @@ export default function AdminDashboard() {
 
           {/* 3.8 activeTab = BILLS (Payments & Billing) */}
           {activeTab === 'bills' && (
+            getRbac(user, 'bills').restricted
+              ? <PageRestrictedBanner pageName="Payments & Invoice" user={user} />
+              :
             <div className="space-y-6 animate-in fade-in duration-200">
 
               {/* Page Header with Actions */}
@@ -3981,18 +4163,20 @@ export default function AdminDashboard() {
                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Manage invoices and track resident payments.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowRecordPaymentModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" /> Record Payment
-                  </button>
-                  <button
-                    onClick={() => setShowGenerateInvoiceModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Generate Invoice
-                  </button>
+                  {getRbac(user, 'bills').add && (<>
+                    <button
+                      onClick={() => setShowRecordPaymentModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" /> Record Payment
+                    </button>
+                    <button
+                      onClick={() => setShowGenerateInvoiceModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[10px] font-bold rounded-lg cursor-pointer transition shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Generate Invoice
+                    </button>
+                  </>)}
                 </div>
               </div>
 
@@ -4165,7 +4349,7 @@ export default function AdminDashboard() {
                                   >
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                   </button>
-                                  {bill.status === 'unpaid' ? (
+                                  {bill.status === 'unpaid' && (getRbac(user, 'bills').add || getRbac(user, 'bills').edit) && (
                                     <button
                                       onClick={() => { setRecordPaymentForm({ billId: bill.id, payment_method: 'Bank Transfer', notes: '' }); setShowRecordPaymentModal(true); }}
                                       className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 cursor-pointer transition"
@@ -4173,7 +4357,8 @@ export default function AdminDashboard() {
                                     >
                                       <Check className="w-3.5 h-3.5" />
                                     </button>
-                                  ) : (
+                                  )}
+                                  {bill.status !== 'unpaid' && getRbac(user, 'bills').edit && (
                                     <button
                                       onClick={() => handleUpdateBillStatus(bill.id, 'unpaid')}
                                       className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 cursor-pointer transition"
@@ -4182,13 +4367,15 @@ export default function AdminDashboard() {
                                       <X className="w-3.5 h-3.5" />
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => handleDeleteBill(bill.id)}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 cursor-pointer transition"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {getRbac(user, 'bills').delete && (
+                                    <button
+                                      onClick={() => handleDeleteBill(bill.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 cursor-pointer transition"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -4611,13 +4798,14 @@ export default function AdminDashboard() {
                     <select
                       className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
                       value={newUserForm.role}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value })}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, role: e.target.value, sub_role: '' })}
                     >
                       <option value="homeowner">Homeowner</option>
                       <option value="tenant">Tenant</option>
                       <option value="maintenance">Maintenance Staff</option>
-                      <option value="staff">Staff Admin</option>
-                      <option value="admin">Super Admin</option>
+                      <option value="staff">Staff</option>
+                      {/* Only admins can create admin accounts */}
+                      {user?.role === 'admin' && <option value="admin">Admin (Super Admin)</option>}
                     </select>
                     <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
@@ -4638,6 +4826,29 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Staff Sub Role – shown only when role === 'staff' */}
+              {newUserForm.role === 'staff' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Staff Sub Role <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <select
+                      required
+                      className="w-full pl-3 pr-10 py-2 bg-blue-50 border border-blue-200 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newUserForm.sub_role}
+                      onChange={(e) => setNewUserForm({ ...newUserForm, sub_role: e.target.value })}
+                    >
+                      <option value="">-- Select Sub Role --</option>
+                      <option value="junior_staff">Junior Staff</option>
+                      <option value="senior_staff">Senior Staff</option>
+                      <option value="staff_admin">Staff Admin</option>
+                      <option value="junior_manager">Junior Manager</option>
+                      <option value="senior_manager">Senior Manager</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-blue-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-3 pt-1">
                 <div>
@@ -5237,22 +5448,26 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Complaint Description <span className="text-blue-500 normal-case font-medium">(editable)</span></span>
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Complaint Description {getRbac(user, 'complaints').edit && <span className="text-blue-500 normal-case font-medium">(editable)</span>}
+                </span>
                 <textarea
                   rows={4}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 rounded-xl text-xs font-medium resize-none transition-all duration-200"
+                  disabled={!getRbac(user, 'complaints').edit}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 rounded-xl text-xs font-medium resize-none transition-all duration-200 disabled:opacity-75 disabled:cursor-not-allowed"
                   value={selectedComplaint.description || ''}
                   onChange={(e) => setSelectedComplaint({ ...selectedComplaint, description: e.target.value })}
-                  placeholder="Edit complaint description..."
+                  placeholder="Complaint description..."
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Update Status</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Status</label>
                   <div className="relative">
                     <select
-                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      disabled={!getRbac(user, 'complaints').edit}
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                       value={selectedComplaint.status}
                       onChange={(e) => setSelectedComplaint({ ...selectedComplaint, status: e.target.value })}
                     >
@@ -5266,10 +5481,11 @@ export default function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Assign Operations Staff</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Assigned Operations Staff</label>
                   <div className="relative">
                     <select
-                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      disabled={!getRbac(user, 'complaints').edit}
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                       value={selectedComplaint.assigned_staff_id || ''}
                       onChange={(e) => setSelectedComplaint({ ...selectedComplaint, assigned_staff_id: e.target.value })}
                     >
@@ -5291,14 +5507,16 @@ export default function AdminDashboard() {
                   onClick={() => setSelectedComplaint(null)}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-xs font-bold rounded-lg cursor-pointer transition"
                 >
-                  Cancel
+                  {getRbac(user, 'complaints').edit ? 'Cancel' : 'Close'}
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
-                >
-                  Update Ticket
-                </button>
+                {getRbac(user, 'complaints').edit && (
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm"
+                  >
+                    Update Ticket
+                  </button>
+                )}
               </div>
             </form>
           </div>

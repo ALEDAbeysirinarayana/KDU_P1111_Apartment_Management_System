@@ -134,7 +134,7 @@ const login = async (req, res) => {
 
     // 4. Generate JWT Token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, sub_role: user.sub_role || null, full_name: user.full_name || null },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -144,7 +144,9 @@ const login = async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        sub_role: user.sub_role || null,
+        full_name: user.full_name || null
       }
     });
   } catch (error) {
@@ -803,7 +805,7 @@ const getAllUsers = async (req, res) => {
 
     // Fetch users
     const selectQuery = `
-      SELECT id, email, role, status, created_at, full_name, nic_or_passport, phone_number, building_name, unit_number, vehicle_number 
+      SELECT id, email, role, sub_role, status, created_at, full_name, nic_or_passport, phone_number, building_name, unit_number, vehicle_number 
       FROM users 
       ${whereClause} 
       ORDER BY created_at DESC 
@@ -847,7 +849,7 @@ const adminCreateUser = async (req, res) => {
     return res.status(403).json({ message: 'Access denied. Admin only.' });
   }
 
-  const { email, password, role, status, full_name, phone_number, building_name, unit_number, vehicle_number } = req.body;
+  const { email, password, role, status, full_name, phone_number, building_name, unit_number, vehicle_number, sub_role } = req.body;
 
   try {
     if (!email || !password || !role) {
@@ -864,9 +866,9 @@ const adminCreateUser = async (req, res) => {
     const userStatus = status || 'approved'; // Default to active/approved for admin creation
 
     await pool.query(
-      `INSERT INTO users (email, password_hash, role, status, full_name, phone_number, building_name, unit_number, vehicle_number) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [email, passwordHash, role, userStatus, full_name || null, phone_number || null, building_name || null, unit_number || null, vehicle_number || null]
+      `INSERT INTO users (email, password_hash, role, sub_role, status, full_name, phone_number, building_name, unit_number, vehicle_number) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [email, passwordHash, role, (role === 'staff' ? (sub_role || null) : null), userStatus, full_name || null, phone_number || null, building_name || null, unit_number || null, vehicle_number || null]
     );
 
     return res.status(201).json({ message: 'User created successfully.' });
@@ -950,7 +952,8 @@ const adminUpdateUser = async (req, res) => {
     unit_number, 
     phone_number, 
     vehicle_number, 
-    nic_or_passport 
+    nic_or_passport,
+    sub_role
   } = req.body;
 
   try {
@@ -971,6 +974,7 @@ const adminUpdateUser = async (req, res) => {
         full_name = ?, 
         email = COALESCE(?, email), 
         role = COALESCE(?, role), 
+        sub_role = ?,
         status = COALESCE(?, status), 
         building_name = ?, 
         unit_number = ?, 
@@ -982,6 +986,7 @@ const adminUpdateUser = async (req, res) => {
         full_name !== undefined ? full_name : null,
         email || null,
         role || null,
+        sub_role !== undefined ? (sub_role || null) : null,
         status || null,
         building_name !== undefined ? building_name : null,
         unit_number !== undefined ? unit_number : null,

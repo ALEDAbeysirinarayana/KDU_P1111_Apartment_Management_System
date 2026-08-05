@@ -82,6 +82,17 @@ async function runSeed() {
       console.log('  users.status ENUM patch failed (may already be correct):', e.message);
     }
 
+    // ── PATCH: users.sub_role – staff sub-role column ────────────────────────
+    console.log('[Patch] Adding users.sub_role column...');
+    try {
+      await pool.query(
+        `ALTER TABLE users ADD COLUMN sub_role VARCHAR(50) NULL DEFAULT NULL AFTER role`
+      );
+      console.log('  users.sub_role column added.');
+    } catch (e) {
+      console.log('  users.sub_role already exists (skipping).');
+    }
+
 
     // ── PATCH: parking_management – drop unique on slot_number, add composite ─
     console.log('[Patch] Patching parking_management table...');

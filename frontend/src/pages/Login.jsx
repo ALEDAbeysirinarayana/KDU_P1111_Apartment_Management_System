@@ -11,10 +11,19 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('tenant');
+  const [subRole, setSubRole] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const STAFF_SUB_ROLES = [
+    { value: 'junior_staff',    label: 'Junior Staff' },
+    { value: 'senior_staff',   label: 'Senior Staff' },
+    { value: 'staff_admin',    label: 'Staff Admin' },
+    { value: 'junior_manager', label: 'Junior Manager' },
+    { value: 'senior_manager', label: 'Senior Manager' },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -178,17 +187,43 @@ export default function Login() {
                       required
                       className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg transition-all duration-200 appearance-none font-medium text-xs sm:text-sm cursor-pointer"
                       value={role}
-                      onChange={(e) => setRole(e.target.value)}
+                      onChange={(e) => { setRole(e.target.value); setSubRole(''); }}
                     >
                       <option value="tenant">Tenant</option>
                       <option value="homeowner">Homeowner</option>
                       <option value="admin">Admin</option>
-                      <option value="staff">Staff</option>
-                      <option value="maintenance">Maintenance</option>
+                      <option value="staff">Maintenance Staff</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
+
+                {/* Staff Sub Role (conditional) */}
+                {role === 'staff' && (
+                  <div>
+                    <label className="text-[9.5px] font-bold text-slate-500 tracking-wider uppercase mb-1 block">
+                      Staff Sub Role
+                    </label>
+                    <div className="relative">
+                      <IdCard className="absolute left-3 top-3 w-4 h-4 text-blue-400" />
+                      <select
+                        id="login_sub_role"
+                        required
+                        className="w-full pl-9 pr-9 py-2 bg-blue-50 border border-blue-200 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg transition-all duration-200 appearance-none font-medium text-xs sm:text-sm cursor-pointer"
+                        value={subRole}
+                        onChange={(e) => setSubRole(e.target.value)}
+                      >
+                        <option value="">-- Select your sub role --</option>
+                        <option value="junior_staff">Junior Staff</option>
+                        <option value="senior_staff">Senior Staff</option>
+                        <option value="staff_admin">Staff Admin</option>
+                        <option value="junior_manager">Junior Manager</option>
+                        <option value="senior_manager">Senior Manager</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-blue-400 pointer-events-none" />
+                    </div>
+                  </div>
+                )}
 
                 {/* Remember Me & Forgot Password */}
                 <div className="flex items-center justify-between pt-0.5 text-xs font-semibold">
