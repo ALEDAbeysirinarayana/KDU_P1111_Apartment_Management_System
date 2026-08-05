@@ -2126,7 +2126,7 @@ export default function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="p-3 bg-rose-50 border border-rose-200/60 rounded-xl text-rose-800 text-xs font-bold flex items-center justify-between">
-                        <span>Outstanding: ${Number(selectedResident.outstanding_amount).toFixed(2)}</span>
+                        <span>Outstanding: LKR {Number(selectedResident.outstanding_amount).toFixed(2)}</span>
                         <X className="w-4 h-4 text-rose-600" />
                       </div>
                     )}
@@ -4137,7 +4137,7 @@ export default function AdminDashboard() {
                                 {bill.resident_name || 'N/A'}
                               </td>
                               <td className="px-5 py-3.5 font-extrabold text-slate-800 text-[10px]">
-                                ${parseFloat(bill.amount).toFixed(2)}
+                                LKR {parseFloat(bill.amount).toFixed(2)}
                               </td>
                               <td className="px-5 py-3.5 text-slate-400 font-semibold text-[10px]">
                                 {bill.created_at ? new Date(bill.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
@@ -4159,7 +4159,7 @@ export default function AdminDashboard() {
                               <td className="px-5 py-3.5">
                                 <div className="flex items-center gap-1.5">
                                   <button
-                                    onClick={() => alert(`Invoice: #${bill.invoice_id || bill.id}\nUnit: ${bill.block_name}-${bill.unit_number}\nResident: ${bill.resident_name || 'N/A'}\nAmount: $${bill.amount}\nDescription: ${bill.description}\nDue: ${new Date(bill.due_date).toLocaleDateString()}\nStatus: ${bill.status.toUpperCase()}`)}
+                                    onClick={() => alert(`Invoice: #${bill.invoice_id || bill.id}\nUnit: ${bill.block_name}-${bill.unit_number}\nResident: ${bill.resident_name || 'N/A'}\nAmount: LKR ${bill.amount}\nDescription: ${bill.description}\nDue: ${new Date(bill.due_date).toLocaleDateString()}\nStatus: ${bill.status.toUpperCase()}`)}
                                     className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer transition"
                                     title="View"
                                   >
@@ -6331,7 +6331,7 @@ export default function AdminDashboard() {
                       <option value="">-- Select Invoice --</option>
                       {bills.filter(b => b.status === 'unpaid').map((b) => (
                         <option key={b.id} value={b.id}>
-                          #{b.invoice_id || b.id} – {b.block_name}-{b.unit_number} – ${b.amount}
+                          #{b.invoice_id || b.id} – {b.block_name}-{b.unit_number} – LKR {b.amount}
                         </option>
                       ))}
                     </select>

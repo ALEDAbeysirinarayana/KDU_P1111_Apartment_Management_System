@@ -1993,7 +1993,7 @@ export default function ResidentDashboard() {
 
           {/* 3.4 activeTab = PAYMENTS */}
           {activeTab === 'payments' && (() => {
-            const fmt = (n) => `$${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const fmt = (n) => `LKR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             const today = new Date();
 
             const filteredBills = bills.filter(b => {
