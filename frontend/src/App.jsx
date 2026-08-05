@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Credentials from './pages/Credentials';
 import NotFound from './pages/NotFound';
 import './App.css';
 
@@ -67,6 +68,9 @@ function App() {
               </AuthRoute>
             } 
           />
+
+          {/* Access Credentials & Test Accounts Route */}
+          <Route path="/credentials" element={<Credentials />} />
 
           {/* Protected Dashboard Route */}
           <Route 

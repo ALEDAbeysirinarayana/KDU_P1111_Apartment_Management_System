@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, User, Building } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LogOut, User, Building, KeyRound } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -12,7 +13,16 @@ export default function Navbar() {
         <span className="font-bold text-lg tracking-wider text-white">Apartment Management System</span>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <Link
+          to="/credentials"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-xs font-semibold text-sky-300 hover:text-white transition-all"
+          title="View Seed Accounts & Credentials"
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          <span>Seed Accounts</span>
+        </Link>
+
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/50 border border-slate-800/80">
           <User className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-medium text-slate-300">{user?.email}</span>

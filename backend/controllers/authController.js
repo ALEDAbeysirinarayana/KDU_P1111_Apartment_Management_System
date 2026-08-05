@@ -999,6 +999,52 @@ const adminUpdateUser = async (req, res) => {
   }
 };
 
+// @desc    Retrieve list of seed accounts with test credentials
+// @route   GET /api/auth/credentials
+// @access  Public
+const getTestCredentials = async (req, res) => {
+  try {
+    const [users] = await pool.query(
+      `SELECT id, email, role, status, full_name, building_name, unit_number, phone_number, nic_or_passport, vehicle_number, relationship_to_owner
+       FROM users
+       ORDER BY FIELD(role, 'admin', 'staff', 'maintenance', 'homeowner', 'tenant'), email ASC`
+    );
+
+    // Map default passwords based on role/email
+    const defaultPasswords = {
+      'admin@apartment.com': 'AdminPass123!',
+      'staff@apartment.com': 'StaffPass123!',
+      'maintenance@apartment.com': 'MaintenancePass123!',
+      'homeowner@apartment.com': 'OwnerPass123!'
+    };
+
+    const formattedUsers = users.map(u => {
+      let pass = defaultPasswords[u.email];
+      if (!pass) {
+        if (u.role === 'admin') pass = 'AdminPass123!';
+        else if (u.role === 'staff') pass = 'StaffPass123!';
+        else if (u.role === 'maintenance') pass = 'MaintenancePass123!';
+        else if (u.role === 'homeowner') pass = 'OwnerPass123!';
+        else if (u.role === 'tenant') pass = 'TenantPass123!';
+        else pass = 'Pass123!';
+      }
+      return {
+        ...u,
+        default_password: pass
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: formattedUsers.length,
+      credentials: formattedUsers
+    });
+  } catch (error) {
+    console.error('Get test credentials error:', error);
+    return res.status(500).json({ message: 'Failed to retrieve test credentials.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -1014,6 +1060,7 @@ module.exports = {
   updateUserStatus,
   deleteUser,
   adminUpdateUser,
-  getPublicAvailableUnits
+  getPublicAvailableUnits,
+  getTestCredentials
 };
 

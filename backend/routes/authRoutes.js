@@ -15,12 +15,14 @@ const {
   updateUserStatus,
   deleteUser,
   adminUpdateUser,
-  getPublicAvailableUnits
+  getPublicAvailableUnits,
+  getTestCredentials
 } = require('../controllers/authController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 router.post('/register', register);
 router.post('/login', login);
+router.get('/credentials', getTestCredentials);
 router.get('/homeowners', getApprovedHomeowners);
 router.get('/available-units', getPublicAvailableUnits);
 router.get('/pending-approvals', verifyToken, getPendingApprovals);

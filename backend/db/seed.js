@@ -255,26 +255,86 @@ async function runSeed() {
       )
     `);
 
-    // 4. Insert Seed Users
-    console.log('\nInserting seed users...');
+    // 4. Insert Seed Users (24 accounts total: 4 core + 20 additional seeds)
+    console.log('\nInserting seed users (24 total)...');
     const users = [
-      { email: 'admin@apartment.com',       password: 'AdminPass123!',       role: 'admin',       status: 'approved' },
-      { email: 'staff@apartment.com',       password: 'StaffPass123!',       role: 'staff',       status: 'approved' },
-      { email: 'maintenance@apartment.com', password: 'MaintenancePass123!', role: 'maintenance', status: 'approved' },
-      { email: 'homeowner@apartment.com',   password: 'OwnerPass123!',       role: 'homeowner',   status: 'approved' }
+      // Core 4 Users
+      { email: 'admin@apartment.com',       password: 'AdminPass123!',       role: 'admin',       status: 'approved', fullName: 'System Admin', phone: '+94 77 000 0001' },
+      { email: 'staff@apartment.com',       password: 'StaffPass123!',       role: 'staff',       status: 'approved', fullName: 'Primary Staff', phone: '+94 77 000 0002' },
+      { email: 'maintenance@apartment.com', password: 'MaintenancePass123!', role: 'maintenance', status: 'approved', fullName: 'Chief Technician', phone: '+94 77 000 0003' },
+      { email: 'homeowner@apartment.com',   password: 'OwnerPass123!',       role: 'homeowner',   status: 'approved', fullName: 'Primary Homeowner', building: 'Block A', unit: 'A01', phone: '+94 77 301 0001', nic: 'NIC882001001V', vehicle: 'WP-CAB-1001' },
+
+      // 20 Additional Seed Users
+      // Additional Staff & Maintenance
+      { email: 'staff.sarah@apartment.com', password: 'StaffPass123!',       role: 'staff',       status: 'approved', fullName: 'Sarah Jenkins', phone: '+94 77 111 2233' },
+      { email: 'maint.alex@apartment.com',  password: 'MaintenancePass123!', role: 'maintenance', status: 'approved', fullName: 'Alex Rivera', phone: '+94 77 222 3344' },
+
+      // Additional Homeowners (11)
+      { email: 'owner.smith@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'John Smith',       building: 'Block A', unit: 'A02', phone: '+94 77 301 0002', nic: 'NIC882001002V', vehicle: 'WP-CAB-1002' },
+      { email: 'owner.johnson@apartment.com',   password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Robert Johnson',   building: 'Block A', unit: 'A03', phone: '+94 77 301 0003', nic: 'NIC882001003V', vehicle: 'WP-CAB-1003' },
+      { email: 'owner.williams@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Emily Williams',   building: 'Block A', unit: 'A04', phone: '+94 77 301 0004', nic: 'NIC882001004V', vehicle: 'WP-CAB-1004' },
+      { email: 'owner.brown@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Michael Brown',    building: 'Block B', unit: 'B01', phone: '+94 77 302 0001', nic: 'NIC882002001V', vehicle: 'WP-CAB-2001' },
+      { email: 'owner.jones@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Jessica Jones',    building: 'Block B', unit: 'B02', phone: '+94 77 302 0002', nic: 'NIC882002002V', vehicle: 'WP-CAB-2002' },
+      { email: 'owner.garcia@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Carlos Garcia',    building: 'Block B', unit: 'B03', phone: '+94 77 302 0003', nic: 'NIC882002003V', vehicle: 'WP-CAB-2003' },
+      { email: 'owner.miller@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'David Miller',     building: 'Block B', unit: 'B04', phone: '+94 77 302 0004', nic: 'NIC882002004V', vehicle: 'WP-CAB-2004' },
+      { email: 'owner.davis@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Amanda Davis',     building: 'Block C', unit: 'C01', phone: '+94 77 303 0001', nic: 'NIC882003001V', vehicle: 'WP-CAB-3001' },
+      { email: 'owner.rodriguez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Sofia Rodriguez',  building: 'Block C', unit: 'C02', phone: '+94 77 303 0002', nic: 'NIC882003002V', vehicle: 'WP-CAB-3002' },
+      { email: 'owner.martinez@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Daniel Martinez',  building: 'Block C', unit: 'C03', phone: '+94 77 303 0003', nic: 'NIC882003003V', vehicle: 'WP-CAB-3003' },
+      { email: 'owner.hernandez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'James Hernandez',  building: 'Block C', unit: 'C04', phone: '+94 77 303 0004', nic: 'NIC882003004V', vehicle: 'WP-CAB-3004' },
+
+      // Additional Tenants (7)
+      { email: 'tenant.wilson@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Mark Wilson',     building: 'Block A', unit: 'A01', ownerEmail: 'homeowner@apartment.com',       relationship: 'Primary Tenant', phone: '+94 77 401 0001', nic: 'NIC991001001V' },
+      { email: 'tenant.anderson@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Chloe Anderson',  building: 'Block A', unit: 'A02', ownerEmail: 'owner.smith@apartment.com',     relationship: 'Tenant',         phone: '+94 77 401 0002', nic: 'NIC991001002V' },
+      { email: 'tenant.taylor@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Ryan Taylor',     building: 'Block A', unit: 'A03', ownerEmail: 'owner.johnson@apartment.com',   relationship: 'Family Member',  phone: '+94 77 401 0003', nic: 'NIC991001003V' },
+      { email: 'tenant.thomas@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Matthew Thomas',  building: 'Block B', unit: 'B01', ownerEmail: 'owner.brown@apartment.com',     relationship: 'Tenant',         phone: '+94 77 402 0001', nic: 'NIC991002001V' },
+      { email: 'tenant.white@apartment.com',    password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Olivia White',    building: 'Block B', unit: 'B02', ownerEmail: 'owner.jones@apartment.com',     relationship: 'Roommate',       phone: '+94 77 402 0002', nic: 'NIC991002002V' },
+      { email: 'tenant.harris@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Joshua Harris',   building: 'Block C', unit: 'C01', ownerEmail: 'owner.davis@apartment.com',     relationship: 'Tenant',         phone: '+94 77 403 0001', nic: 'NIC991003001V' },
+      { email: 'tenant.martin@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Sophia Martin',   building: 'Block C', unit: 'C02', ownerEmail: 'owner.rodriguez@apartment.com', relationship: 'Tenant',         phone: '+94 77 403 0002', nic: 'NIC991003002V' },
+
+      // 10 Pending User Registrations (Awaiting Admin / Staff Approval)
+      // Pending Homeowners (5)
+      { email: 'pending.owner1@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Alexander Wright', building: 'Block A', unit: 'A05', phone: '+94 77 501 0001', nic: 'NIC992001001V', vehicle: 'WP-CAB-5001' },
+      { email: 'pending.owner2@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Isabella Scott',    building: 'Block A', unit: 'A06', phone: '+94 77 501 0002', nic: 'NIC992001002V', vehicle: 'WP-CAB-5002' },
+      { email: 'pending.owner3@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Benjamin Green',    building: 'Block B', unit: 'B05', phone: '+94 77 502 0001', nic: 'NIC992002001V', vehicle: 'WP-CAB-5003' },
+      { email: 'pending.owner4@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Charlotte Adams',   building: 'Block B', unit: 'B06', phone: '+94 77 502 0002', nic: 'NIC992002002V', vehicle: 'WP-CAB-5004' },
+      { email: 'pending.owner5@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Lucas Baker',       building: 'Block C', unit: 'C05', phone: '+94 77 503 0001', nic: 'NIC992003001V', vehicle: 'WP-CAB-5005' },
+
+      // Pending Tenants (5)
+      { email: 'pending.tenant1@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Mia Nelson',       building: 'Block A', unit: 'A04', ownerEmail: 'owner.williams@apartment.com',  relationship: 'Tenant',        phone: '+94 77 601 0001', nic: 'NIC993001001V' },
+      { email: 'pending.tenant2@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Ethan Carter',     building: 'Block B', unit: 'B03', ownerEmail: 'owner.garcia@apartment.com',    relationship: 'Tenant',        phone: '+94 77 602 0001', nic: 'NIC993002001V' },
+      { email: 'pending.tenant3@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Harper Mitchell', building: 'Block B', unit: 'B04', ownerEmail: 'owner.miller@apartment.com',     relationship: 'Roommate',      phone: '+94 77 602 0002', nic: 'NIC993002002V' },
+      { email: 'pending.tenant4@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Mason Perez',      building: 'Block C', unit: 'C03', ownerEmail: 'owner.martinez@apartment.com', relationship: 'Tenant',        phone: '+94 77 603 0001', nic: 'NIC993003001V' },
+      { email: 'pending.tenant5@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Evelyn Roberts',   building: 'Block C', unit: 'C04', ownerEmail: 'owner.hernandez@apartment.com',relationship: 'Family Member', phone: '+94 77 603 0002', nic: 'NIC993003002V' }
     ];
 
-    const insertedUsers = {};
-    for (const user of users) {
+    const insertedUsersByEmail = {};
+    const insertedUsersByRole = {};
+
+    for (const u of users) {
       const salt = await bcrypt.genSalt(10);
-      const hash = await bcrypt.hash(user.password, salt);
-      
+      const hash = await bcrypt.hash(u.password, salt);
+
+      let ownerId = null;
+      if (u.ownerEmail && insertedUsersByEmail[u.ownerEmail]) {
+        ownerId = insertedUsersByEmail[u.ownerEmail];
+      }
+
       const [result] = await pool.query(
-        'INSERT INTO users (email, password_hash, role, status, owner_approved) VALUES (?, ?, ?, ?, ?)',
-        [user.email, hash, user.role, user.status, 1]
+        `INSERT INTO users (
+          email, password_hash, role, status, owner_id, owner_approved,
+          full_name, nic_or_passport, phone_number, building_name, unit_number, vehicle_number, relationship_to_owner
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          u.email, hash, u.role, u.status, ownerId, 1,
+          u.fullName || null, u.nic || null, u.phone || null, u.building || null, u.unit || null, u.vehicle || null, u.relationship || null
+        ]
       );
-      insertedUsers[user.role] = result.insertId;
-      console.log(`  Created: ${user.email} (${user.role})`);
+
+      insertedUsersByEmail[u.email] = result.insertId;
+      if (!insertedUsersByRole[u.role]) {
+        insertedUsersByRole[u.role] = result.insertId;
+      }
+      console.log(`  Created: ${u.email} (${u.role})`);
     }
 
     // 5. Insert Seed Parking Slots
@@ -315,20 +375,30 @@ async function runSeed() {
       { name: 'Block C', prefix: 'C' }
     ];
 
-    let unitIndex = 0; // global counter for first-unit homeowner assignment
+    // Build map from unit_number to owner_id and tenant_id
+    const unitOwnerMap = {};
+    const unitTenantMap = {};
+    for (const u of users) {
+      if (u.unit) {
+        if (u.role === 'homeowner') {
+          unitOwnerMap[u.unit] = insertedUsersByEmail[u.email];
+        } else if (u.role === 'tenant') {
+          unitTenantMap[u.unit] = insertedUsersByEmail[u.email];
+        }
+      }
+    }
+
     for (const block of blocks) {
       for (let i = 1; i <= 20; i++) {
-        // Distribute across 5 floors: units 1-4 → floor 1, 5-8 → floor 2, etc.
         const floorNumber = Math.ceil(i / 4);
-        // Unit number: e.g. A01, A02, ... A20 / B01 ... etc.
         const unitNumber  = `${block.prefix}${String(i).padStart(2, '0')}`;
         const unitType    = unitTypes[(i - 1) % unitTypes.length];
         const slotKey     = `P-${block.prefix}${String(i).padStart(2, '0')}`;
         const parkingSlotId = slotIds[slotKey];
 
-        // Only the very first unit (Block A, unit 1) gets the homeowner
-        const ownerId = (unitIndex === 0) ? insertedUsers['homeowner'] : null;
-        const status  = ownerId ? 'occupied' : 'vacant';
+        const ownerId  = unitOwnerMap[unitNumber] || null;
+        const tenantId = unitTenantMap[unitNumber] || null;
+        const status   = (ownerId || tenantId) ? 'occupied' : 'vacant';
 
         const [result] = await pool.query(
           'INSERT INTO units (block_name, floor_number, unit_number, type, status, owner_id, parking_slot_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -342,8 +412,6 @@ async function runSeed() {
             [result.insertId, parkingSlotId]
           );
         }
-
-        unitIndex++;
       }
     }
     console.log('  60 units created (20 per block for Blocks A, B, C).');
@@ -379,8 +447,8 @@ async function runSeed() {
       const [dbEvents] = await pool.query('SELECT id, event_id FROM events');
       const yogaEvent    = dbEvents.find(e => e.event_id === 'EV-201');
       const meetingEvent = dbEvents.find(e => e.event_id === 'EV-204');
-      const homeownerId  = insertedUsers['homeowner'];
-      const staffId      = insertedUsers['staff'];
+      const homeownerId  = insertedUsersByRole['homeowner'];
+      const staffId      = insertedUsersByRole['staff'];
 
       if (yogaEvent && meetingEvent) {
         await pool.query(`
@@ -397,7 +465,7 @@ async function runSeed() {
     console.log('Seeding notices...');
     const [noticeCount] = await pool.query('SELECT COUNT(*) AS count FROM notices');
     if (noticeCount[0].count === 0) {
-      const adminId = insertedUsers['admin'];
+      const adminId = insertedUsersByRole['admin'];
       await pool.query(`
         INSERT INTO notices (notice_id, title, content, category, created_by, created_at, expiry_date, priority, audience, status) VALUES 
         ('NOT-2024-001', 'Water Maintenance Shutdown',  'Scheduled water supply shutdown for tank cleaning in Tower A & B.', 'Utility', ?, '2026-10-24', '2026-10-26', 'urgent', 'Tower A, B',    'published'),

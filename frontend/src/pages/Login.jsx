@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, AtSign, Loader2, Building, Eye, EyeOff, IdCard, ChevronDown, LogIn } from 'lucide-react';
+import { Lock, AtSign, Loader2, Building, Eye, EyeOff, IdCard, ChevronDown, LogIn, KeyRound } from 'lucide-react';
 import apartmentImage from '../assets/apartment_login.png';
 
 export default function Login() {
@@ -221,13 +221,23 @@ export default function Login() {
                 <div className="h-[1px] bg-slate-200 flex-1"></div>
               </div>
 
-              {/* Register Button */}
-              <Link
-                to="/register"
-                className="w-full py-2.5 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold border border-slate-200/60 transition-all duration-150 text-center block text-sm shadow-sm"
-              >
-                Register Account
-              </Link>
+              {/* Register & Credentials Buttons */}
+              <div className="space-y-2">
+                <Link
+                  to="/register"
+                  className="w-full py-2.5 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold border border-slate-200/60 transition-all duration-150 text-center block text-sm shadow-sm"
+                >
+                  Register Account
+                </Link>
+
+                <Link
+                  to="/credentials"
+                  className="w-full py-2.5 px-4 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold border border-blue-200/70 transition-all duration-150 text-center flex items-center justify-center gap-2 text-xs shadow-sm"
+                >
+                  <KeyRound className="w-4 h-4 text-blue-600" />
+                  <span>View Seed Accounts & Access Credentials</span>
+                </Link>
+              </div>
 
               {/* Agreement Note */}
               <p className="text-[10.5px] text-slate-400/90 text-center mt-7 leading-relaxed">
