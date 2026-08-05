@@ -136,12 +136,71 @@ export default function AdminDashboard() {
 
   // Form Input States
   const [newUnit, setNewUnit] = useState({ block_name: '', floor_number: '', unit_number: '', type: '2BHK', status: 'vacant' });
-  const [allocation, setAllocation] = useState({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '' });
+  const [allocation, setAllocation] = useState({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '', ownerLabel: '', tenantLabel: '' });
   const [showAddUnitModal, setShowAddUnitModal] = useState(false);
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [newBill, setNewBill] = useState({ unit_id: '', amount: '', description: '', due_date: '' });
   const [newNotice, setNewNotice] = useState({ title: '', content: '' });
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Allocate modal – user search state
+  const [ownerSearch, setOwnerSearch]       = useState('');
+  const [tenantSearch, setTenantSearch]     = useState('');
+  const [ownerResults, setOwnerResults]     = useState([]);
+  const [tenantResults, setTenantResults]   = useState([]);
+  const [showOwnerDrop, setShowOwnerDrop]   = useState(false);
+  const [showTenantDrop, setShowTenantDrop] = useState(false);
+  const [ownerLoading, setOwnerLoading]     = useState(false);
+  const [tenantLoading, setTenantLoading]   = useState(false);
+
+  // Debounced resident-user search for allocate modal
+  const searchResidentUsers = async (query, role, setResults, setLoading) => {
+    setLoading(true);
+    try {
+      const res = await api.get('/units/resident-users', { params: { search: query, role } });
+      setResults(res.data || []);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOwnerSearchChange = (val) => {
+    setOwnerSearch(val);
+    setShowOwnerDrop(true);
+    searchResidentUsers(val, 'homeowner', setOwnerResults, setOwnerLoading);
+  };
+
+  const handleTenantSearchChange = (val) => {
+    setTenantSearch(val);
+    setShowTenantDrop(true);
+    searchResidentUsers(val, 'tenant', setTenantResults, setTenantLoading);
+  };
+
+  const selectOwner = (user) => {
+    setAllocation(prev => ({ ...prev, owner_id: user.id, ownerLabel: `${user.full_name || user.email} (${user.email})` }));
+    setOwnerSearch(user.full_name || user.email);
+    setShowOwnerDrop(false);
+  };
+
+  const clearOwner = () => {
+    setAllocation(prev => ({ ...prev, owner_id: '', ownerLabel: '' }));
+    setOwnerSearch('');
+    setOwnerResults([]);
+  };
+
+  const selectTenant = (user) => {
+    setAllocation(prev => ({ ...prev, tenant_id: user.id, tenantLabel: `${user.full_name || user.email} (${user.email})` }));
+    setTenantSearch(user.full_name || user.email);
+    setShowTenantDrop(false);
+  };
+
+  const clearTenant = () => {
+    setAllocation(prev => ({ ...prev, tenant_id: '', tenantLabel: '' }));
+    setTenantSearch('');
+    setTenantResults([]);
+  };
 
   // Fetch Dashboard Statistics and tab data
   const fetchData = async () => {
@@ -417,7 +476,11 @@ export default function AdminDashboard() {
       });
       setSuccessMsg('Unit resource allocations saved!');
       setShowAllocateModal(false);
-      setAllocation({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '' });
+      setAllocation({ unitId: '', owner_id: '', tenant_id: '', parking_slot_id: '', ownerLabel: '', tenantLabel: '' });
+      setOwnerSearch('');
+      setTenantSearch('');
+      setOwnerResults([]);
+      setTenantResults([]);
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (error) {
@@ -2253,7 +2316,22 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="py-3.5 font-bold text-slate-700">
-                              {u.tenant_name || u.owner_name || (
+                              {(u.owner_id || u.tenant_id) ? (
+                                <div className="flex flex-col gap-0.5">
+                                  {u.owner_id && (
+                                    <span className="text-slate-800 text-xs font-bold">
+                                      {u.owner_name || u.owner_email || `User #${u.owner_id}`}
+                                      <span className="ml-1 text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100 rounded px-1 py-px">Owner</span>
+                                    </span>
+                                  )}
+                                  {u.tenant_id && (
+                                    <span className="text-slate-600 text-xs font-semibold">
+                                      {u.tenant_name || u.tenant_email || `User #${u.tenant_id}`}
+                                      <span className="ml-1 text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-100 rounded px-1 py-px">Tenant</span>
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
                                 <span className="text-slate-400 font-semibold italic">Unassigned</span>
                               )}
                             </td>
@@ -2267,8 +2345,16 @@ export default function AdminDashboard() {
                                     unitId: u.id,
                                     owner_id: u.owner_id || '',
                                     tenant_id: u.tenant_id || '',
-                                    parking_slot_id: u.parking_slot_id || ''
+                                    parking_slot_id: u.parking_slot_id || '',
+                                    ownerLabel: u.owner_name ? `${u.owner_name} (${u.owner_email || ''})` : '',
+                                    tenantLabel: u.tenant_name ? `${u.tenant_name} (${u.tenant_email || ''})` : ''
                                   });
+                                  setOwnerSearch(u.owner_name || '');
+                                  setTenantSearch(u.tenant_name || '');
+                                  setOwnerResults([]);
+                                  setTenantResults([]);
+                                  setShowOwnerDrop(false);
+                                  setShowTenantDrop(false);
                                   setShowAllocateModal(true);
                                 }}
                                 className="px-2.5 py-1 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-bold rounded cursor-pointer transition"
@@ -3092,8 +3178,16 @@ export default function AdminDashboard() {
                                       unitId: slot.unit_id || '',
                                       owner_id: '',
                                       tenant_id: '',
-                                      parking_slot_id: slot.id
+                                      parking_slot_id: slot.id,
+                                      ownerLabel: '',
+                                      tenantLabel: ''
                                     });
+                                    setOwnerSearch('');
+                                    setTenantSearch('');
+                                    setOwnerResults([]);
+                                    setTenantResults([]);
+                                    setShowOwnerDrop(false);
+                                    setShowTenantDrop(false);
                                     setShowAllocateModal(true);
                                   }}
                                   className="text-xs text-blue-700 hover:underline font-bold"
@@ -4732,26 +4826,104 @@ export default function AdminDashboard() {
             </div>
 
             <form onSubmit={handleAllocate} className="space-y-4">
+              {/* Owner searchable combobox */}
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1.5">Owner User ID (optional)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 4"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                  value={allocation.owner_id}
-                  onChange={(e) => setAllocation({ ...allocation, owner_id: e.target.value })}
-                />
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Owner (optional)</label>
+                <div className="relative">
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Search by name or email..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium pr-7"
+                        value={ownerSearch}
+                        onChange={(e) => handleOwnerSearchChange(e.target.value)}
+                        onFocus={() => { if (!allocation.owner_id) { setShowOwnerDrop(true); handleOwnerSearchChange(ownerSearch); } }}
+                        onBlur={() => setTimeout(() => setShowOwnerDrop(false), 180)}
+                        autoComplete="off"
+                      />
+                      {ownerLoading && (
+                        <span className="absolute right-2.5 top-2.5 w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {allocation.owner_id && (
+                      <button type="button" onClick={clearOwner}
+                        className="px-2 text-slate-400 hover:text-rose-500 border border-slate-200 rounded-lg bg-slate-50 text-xs font-bold transition cursor-pointer"
+                      >✕</button>
+                    )}
+                  </div>
+                  {allocation.owner_id && (
+                    <p className="mt-1 text-[10px] text-emerald-600 font-semibold">✓ {allocation.ownerLabel}</p>
+                  )}
+                  {showOwnerDrop && ownerResults.length > 0 && (
+                    <ul className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                      {ownerResults.map(u => (
+                        <li key={u.id}
+                          onMouseDown={() => selectOwner(u)}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none"
+                        >
+                          <p className="text-xs font-bold text-slate-800">{u.full_name || '—'}</p>
+                          <p className="text-[10px] text-slate-400">{u.email}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {showOwnerDrop && !ownerLoading && ownerResults.length === 0 && ownerSearch.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2">
+                      <p className="text-[10px] text-slate-400 italic">No approved homeowners found.</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
+              {/* Tenant searchable combobox */}
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1.5">Tenant User ID (optional)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 5"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium"
-                  value={allocation.tenant_id}
-                  onChange={(e) => setAllocation({ ...allocation, tenant_id: e.target.value })}
-                />
+                <label className="text-xs font-bold text-slate-500 block mb-1.5">Tenant (optional)</label>
+                <div className="relative">
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Search by name or email..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-amber-500 focus:bg-white focus:ring-1 focus:ring-amber-500 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg transition-all text-xs font-medium pr-7"
+                        value={tenantSearch}
+                        onChange={(e) => handleTenantSearchChange(e.target.value)}
+                        onFocus={() => { if (!allocation.tenant_id) { setShowTenantDrop(true); handleTenantSearchChange(tenantSearch); } }}
+                        onBlur={() => setTimeout(() => setShowTenantDrop(false), 180)}
+                        autoComplete="off"
+                      />
+                      {tenantLoading && (
+                        <span className="absolute right-2.5 top-2.5 w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                    {allocation.tenant_id && (
+                      <button type="button" onClick={clearTenant}
+                        className="px-2 text-slate-400 hover:text-rose-500 border border-slate-200 rounded-lg bg-slate-50 text-xs font-bold transition cursor-pointer"
+                      >✕</button>
+                    )}
+                  </div>
+                  {allocation.tenant_id && (
+                    <p className="mt-1 text-[10px] text-amber-600 font-semibold">✓ {allocation.tenantLabel}</p>
+                  )}
+                  {showTenantDrop && tenantResults.length > 0 && (
+                    <ul className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                      {tenantResults.map(u => (
+                        <li key={u.id}
+                          onMouseDown={() => selectTenant(u)}
+                          className="px-3 py-2 hover:bg-amber-50 cursor-pointer border-b border-slate-100 last:border-none"
+                        >
+                          <p className="text-xs font-bold text-slate-800">{u.full_name || '—'}</p>
+                          <p className="text-[10px] text-slate-400">{u.email}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {showTenantDrop && !tenantLoading && tenantResults.length === 0 && tenantSearch.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2">
+                      <p className="text-[10px] text-slate-400 italic">No approved tenants found.</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>

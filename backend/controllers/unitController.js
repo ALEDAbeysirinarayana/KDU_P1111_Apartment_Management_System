@@ -41,10 +41,14 @@ const getUnits = async (req, res) => {
     const [units] = await pool.query(`
       SELECT 
         u.id, u.block_name, u.floor_number, u.unit_number, u.type, u.status,
-        u.owner_id, owner.email AS owner_email, owner.full_name AS owner_name,
-        u.tenant_id, tenant.email AS tenant_email, tenant.full_name AS tenant_name,
+        u.owner_id,
+        owner.email AS owner_email,
+        COALESCE(owner.full_name, owner.email) AS owner_name,
+        u.tenant_id,
+        tenant.email AS tenant_email,
+        COALESCE(tenant.full_name, tenant.email) AS tenant_name,
         u.parking_slot_id, p.slot_number AS parking_slot_number,
-        COALESCE(tenant.full_name, owner.full_name, MAX(u_user.full_name), tenant.email, owner.email, MAX(u_user.email), 'Resident') AS resident_name,
+        COALESCE(tenant.full_name, tenant.email, owner.full_name, owner.email, MAX(u_user.full_name), MAX(u_user.email), 'Resident') AS resident_name,
         COALESCE(tenant.email, owner.email, MAX(u_user.email), NULL) AS resident_email,
         CASE 
           WHEN tenant.id IS NOT NULL THEN 'Tenant'
@@ -58,7 +62,10 @@ const getUnits = async (req, res) => {
       LEFT JOIN users u_user ON (u_user.unit_number = u.unit_number AND u_user.status = 'approved')
       LEFT JOIN parking_management p ON u.parking_slot_id = p.id
       ${whereClause}
-      GROUP BY u.id, u.block_name, u.floor_number, u.unit_number, u.type, u.status, u.owner_id, owner.email, owner.full_name, u.tenant_id, tenant.email, tenant.full_name, u.parking_slot_id, p.slot_number
+      GROUP BY u.id, u.block_name, u.floor_number, u.unit_number, u.type, u.status,
+               u.owner_id, owner.email, owner.full_name,
+               u.tenant_id, tenant.email, tenant.full_name,
+               u.parking_slot_id, p.slot_number
       ORDER BY u.block_name, u.floor_number, u.unit_number
     `, params);
 
@@ -265,5 +272,37 @@ module.exports = {
   getUnits,
   createUnit,
   allocateUnit,
-  getMyUnit
+  getMyUnit,
+  searchResidentUsers
 };
+
+// @desc    Search approved homeowners and tenants by name or email
+// @route   GET /api/units/resident-users?search=&role=
+// @access  Private (Admin / Staff)
+async function searchResidentUsers(req, res) {
+  try {
+    const { search = '', role = '' } = req.query;
+    const searchPattern = `%${search.trim()}%`;
+
+    let roleCondition = "u.role IN ('homeowner', 'tenant')";
+    if (role === 'homeowner') roleCondition = "u.role = 'homeowner'";
+    if (role === 'tenant')    roleCondition = "u.role = 'tenant'";
+
+    const [users] = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.role
+       FROM users u
+       WHERE ${roleCondition}
+         AND u.status = 'approved'
+         AND (u.full_name LIKE ? OR u.email LIKE ?)
+       ORDER BY u.full_name ASC
+       LIMIT 30`,
+      [searchPattern, searchPattern]
+    );
+
+    return res.status(200).json(users);
+  } catch (error) {
+    console.error('Search resident users error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+}
+
