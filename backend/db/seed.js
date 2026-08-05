@@ -279,14 +279,19 @@ async function runSeed() {
 
     // 5. Insert Seed Parking Slots
     console.log('Inserting seed parking slots...');
-    const parkingSlots = [
-      { slot_number: 'P-101', type: 'permanent', status: 'active' },
-      { slot_number: 'P-102', type: 'permanent', status: 'active' },
-      { slot_number: 'P-201', type: 'permanent', status: 'active' },
-      { slot_number: 'P-202', type: 'permanent', status: 'active' },
-      { slot_number: 'G-101', type: 'guest',     status: 'approved' },
-      { slot_number: 'G-102', type: 'guest',     status: 'approved' }
-    ];
+
+    // Generate 60 permanent slots (one per unit: A01–A20, B01–B20, C01–C20)
+    // plus 6 guest slots
+    const parkingSlots = [];
+    for (const block of ['A', 'B', 'C']) {
+      for (let i = 1; i <= 20; i++) {
+        parkingSlots.push({ slot_number: `P-${block}${String(i).padStart(2,'0')}`, type: 'permanent', status: 'active' });
+      }
+    }
+    // Guest slots
+    for (let i = 1; i <= 6; i++) {
+      parkingSlots.push({ slot_number: `G-${String(i).padStart(3,'0')}`, type: 'guest', status: 'approved' });
+    }
 
     const slotIds = {};
     for (const slot of parkingSlots) {
@@ -296,32 +301,52 @@ async function runSeed() {
       );
       slotIds[slot.slot_number] = result.insertId;
     }
-    console.log('Parking slots created.');
+    console.log(`  ${parkingSlots.length} parking slots created.`);
 
-    // 6. Insert Seed Units
-    console.log('Inserting seed units...');
-    const units = [
-      { block_name: 'Block A', floor_number: 1, unit_number: '101', type: '2BHK', owner_id: insertedUsers['homeowner'], parking_slot_id: slotIds['P-101'] },
-      { block_name: 'Block A', floor_number: 1, unit_number: '102', type: '3BHK', owner_id: null, parking_slot_id: slotIds['P-102'] },
-      { block_name: 'Block B', floor_number: 2, unit_number: '201', type: '2BHK', owner_id: null, parking_slot_id: slotIds['P-201'] },
-      { block_name: 'Block B', floor_number: 2, unit_number: '202', type: '1BHK', owner_id: null, parking_slot_id: slotIds['P-202'] }
+    // 6. Insert Seed Units – 20 units per block for Blocks A, B, C (60 total)
+    console.log('Inserting seed units (20 per block × 3 blocks = 60 units)...');
+
+    // Unit types cycling: 1BHK, 2BHK, 3BHK
+    const unitTypes = ['1BHK', '2BHK', '3BHK'];
+    // Blocks definition
+    const blocks = [
+      { name: 'Block A', prefix: 'A' },
+      { name: 'Block B', prefix: 'B' },
+      { name: 'Block C', prefix: 'C' }
     ];
 
-    for (const unit of units) {
-      const status = (unit.owner_id || unit.tenant_id) ? 'occupied' : 'vacant';
-      const [result] = await pool.query(
-        'INSERT INTO units (block_name, floor_number, unit_number, type, status, owner_id, parking_slot_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [unit.block_name, unit.floor_number, unit.unit_number, unit.type, status, unit.owner_id, unit.parking_slot_id]
-      );
-      
-      if (unit.parking_slot_id) {
-        await pool.query(
-          'UPDATE parking_management SET unit_id = ? WHERE id = ?',
-          [result.insertId, unit.parking_slot_id]
+    let unitIndex = 0; // global counter for first-unit homeowner assignment
+    for (const block of blocks) {
+      for (let i = 1; i <= 20; i++) {
+        // Distribute across 5 floors: units 1-4 → floor 1, 5-8 → floor 2, etc.
+        const floorNumber = Math.ceil(i / 4);
+        // Unit number: e.g. A01, A02, ... A20 / B01 ... etc.
+        const unitNumber  = `${block.prefix}${String(i).padStart(2, '0')}`;
+        const unitType    = unitTypes[(i - 1) % unitTypes.length];
+        const slotKey     = `P-${block.prefix}${String(i).padStart(2, '0')}`;
+        const parkingSlotId = slotIds[slotKey];
+
+        // Only the very first unit (Block A, unit 1) gets the homeowner
+        const ownerId = (unitIndex === 0) ? insertedUsers['homeowner'] : null;
+        const status  = ownerId ? 'occupied' : 'vacant';
+
+        const [result] = await pool.query(
+          'INSERT INTO units (block_name, floor_number, unit_number, type, status, owner_id, parking_slot_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [block.name, floorNumber, unitNumber, unitType, status, ownerId, parkingSlotId]
         );
+
+        // Link parking slot back to unit
+        if (parkingSlotId) {
+          await pool.query(
+            'UPDATE parking_management SET unit_id = ? WHERE id = ?',
+            [result.insertId, parkingSlotId]
+          );
+        }
+
+        unitIndex++;
       }
     }
-    console.log('Units created.');
+    console.log('  60 units created (20 per block for Blocks A, B, C).');
 
     // 7. Seed Facilities
     console.log('Seeding facilities...');
