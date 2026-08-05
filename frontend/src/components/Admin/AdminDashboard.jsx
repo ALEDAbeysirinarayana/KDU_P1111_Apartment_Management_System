@@ -4,8 +4,9 @@ import {
   Users, Building, FileText, Compass, Bell, Check, X, Plus, Trash2, 
   ShieldAlert, LayoutDashboard, Search, Settings, LogOut, Loader2, 
   Megaphone, Calendar, ClipboardList, Shield, ShieldAlert as AlertIcon, CreditCard, ChevronDown,
-  Clock, CheckCircle, Eye, Edit
+  Clock, CheckCircle, Eye, Edit, TrendingUp
 } from 'lucide-react';
+
 
 export default function AdminDashboard() {
   const { api, user, logout } = useAuth();
@@ -4221,44 +4222,199 @@ export default function AdminDashboard() {
               {/* Bottom Section: Monthly Chart + Overdue Panel */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* Monthly Payment Collection Chart */}
-                <div className="lg:col-span-2 bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Monthly Payment Collection</h3>
-                      <p className="text-[9px] text-slate-400 font-bold mt-0.5">Revenue trends for the past 6 months</p>
+                {/* Monthly Payment Collection Chart – Premium Design */}
+                <div className="lg:col-span-2 bg-white border border-slate-200/60 rounded-2xl shadow-sm overflow-hidden">
+
+                  {/* Chart Header */}
+                  <div className="px-5 pt-5 pb-4 border-b border-slate-50">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Monthly Payment Collection</h3>
+                        <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Revenue trends · last 6 months</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Total Collected</p>
+                          <p className="text-sm font-black text-[#133fbd]">
+                            LKR {billMonthlyData.reduce((s, d) => s + parseFloat(d.collected || 0), 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
+                          <TrendingUp className="w-4 h-4 text-[#133fbd]" />
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-[9px] font-extrabold text-slate-400 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
-                      {new Date().getFullYear()}
-                    </span>
+
+                    {/* Mini stat row */}
+                    {billMonthlyData.length > 0 && (() => {
+                      const vals = billMonthlyData.map(d => parseFloat(d.collected || 0));
+                      const peak = Math.max(...vals);
+                      const peakMonth = billMonthlyData[vals.indexOf(peak)]?.month;
+                      const avg = Math.round(vals.reduce((a,b) => a+b, 0) / vals.length);
+                      return (
+                        <div className="flex gap-4 mt-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-[#133fbd]" />
+                            <span className="text-[8px] font-bold text-slate-500">Peak: <span className="text-slate-700">{peakMonth} — LKR {peak.toLocaleString()}</span></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                            <span className="text-[8px] font-bold text-slate-500">Avg/Month: <span className="text-slate-700">LKR {avg.toLocaleString()}</span></span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Simple bar chart */}
-                  {billMonthlyData.length === 0 ? (
-                    <div className="h-28 flex items-center justify-center">
-                      <p className="text-xs text-slate-300 italic">No payment collection data yet.</p>
-                    </div>
-                  ) : (
-                    <div className="flex items-end gap-3 h-28">
-                      {billMonthlyData.map((item, i) => {
-                        const maxVal = Math.max(...billMonthlyData.map(d => parseFloat(d.collected || 0)), 1);
-                        const heightPct = (parseFloat(item.collected || 0) / maxVal) * 100;
-                        const isLast = i === billMonthlyData.length - 1;
-                        return (
-                          <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                            <span className="text-[8px] text-slate-400 font-bold">LKR {Math.round(item.collected/1000)}k</span>
-                            <div
-                              className={`w-full rounded-t-md transition-all ${isLast ? 'bg-blue-600' : 'bg-slate-200'}`}
-                              style={{ height: `${Math.max(heightPct, 4)}%` }}
-                              title={`${item.month}: LKR ${parseFloat(item.collected).toLocaleString()}`}
-                            />
-                            <span className={`text-[8px] font-extrabold uppercase ${isLast ? 'text-blue-600' : 'text-slate-400'}`}>{item.month}</span>
+                  {/* Chart Body */}
+                  <div className="px-5 pt-5 pb-4">
+                    {billMonthlyData.length === 0 ? (
+                      <div className="h-36 flex flex-col items-center justify-center gap-2">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-slate-200" />
+                        </div>
+                        <p className="text-xs text-slate-300 italic">No payment collection data yet.</p>
+                      </div>
+                    ) : (() => {
+                      const vals   = billMonthlyData.map(d => parseFloat(d.collected || 0));
+                      const maxVal = Math.max(...vals, 1);
+                      const chartH = 120; // px height of chart area
+
+                      // SVG area path (smooth line)
+                      const points = billMonthlyData.map((_, i) => {
+                        const x = (i / (billMonthlyData.length - 1 || 1)) * 100;
+                        const y = 100 - (vals[i] / maxVal) * 85;
+                        return `${x},${y}`;
+                      });
+                      const linePath = `M ${points.join(' L ')}`;
+                      const areaPath = `M ${points[0]} L ${points.join(' L ')} L 100,100 L 0,100 Z`;
+
+                      return (
+                        <div className="relative">
+                          {/* Y-axis guide lines */}
+                          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none" style={{ height: chartH }}>
+                            {[100, 75, 50, 25, 0].map(pct => (
+                              <div key={pct} className="flex items-center gap-2">
+                                <span className="text-[7px] font-bold text-slate-300 w-8 text-right shrink-0">
+                                  {pct > 0 ? `${Math.round((maxVal * pct) / 100 / 1000)}k` : '0'}
+                                </span>
+                                <div className="flex-1 border-t border-dashed border-slate-100" />
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })}
+
+                          {/* SVG trend line overlay */}
+                          <div className="ml-10 relative" style={{ height: chartH }}>
+                            <svg
+                              viewBox="0 0 100 100"
+                              preserveAspectRatio="none"
+                              className="absolute inset-0 w-full h-full"
+                              style={{ zIndex: 1 }}
+                            >
+                              <defs>
+                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor="#133fbd" stopOpacity="0.12" />
+                                  <stop offset="100%" stopColor="#133fbd" stopOpacity="0" />
+                                </linearGradient>
+                              </defs>
+                              <path d={areaPath} fill="url(#areaGrad)" />
+                              <path d={linePath} fill="none" stroke="#133fbd" strokeWidth="1.5" strokeOpacity="0.25" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+
+                            {/* Bar columns */}
+                            <div className="relative flex items-end gap-2 h-full" style={{ zIndex: 2 }}>
+                              {billMonthlyData.map((item, i) => {
+                                const heightPct = Math.max((vals[i] / maxVal) * 100, 3);
+                                const isPeak    = vals[i] === maxVal;
+                                const isLast    = i === billMonthlyData.length - 1;
+                                const opacity   = 0.35 + (vals[i] / maxVal) * 0.65;
+
+                                return (
+                                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                                    {/* Hover tooltip */}
+                                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-bold px-2 py-1 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+                                      {item.month}: LKR {parseFloat(item.collected).toLocaleString()}
+                                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                                    </div>
+
+                                    {/* Value label above bar */}
+                                    <span className="text-[7px] font-extrabold text-slate-400 group-hover:text-[#133fbd] transition-colors">
+                                      {Math.round(vals[i] / 1000)}k
+                                    </span>
+
+                                    {/* The bar */}
+                                    <div
+                                      className="w-full rounded-t-lg transition-all duration-500 relative overflow-hidden"
+                                      style={{
+                                        height: `${heightPct}%`,
+                                        background: isPeak
+                                          ? 'linear-gradient(to top, #0f3299, #133fbd, #3b5ef5)'
+                                          : isLast
+                                          ? 'linear-gradient(to top, #1e3a8a, #2563eb, #60a5fa)'
+                                          : `linear-gradient(to top, rgba(19,63,189,${opacity * 0.7}), rgba(96,165,250,${opacity}))`,
+                                        boxShadow: isPeak ? '0 -2px 12px rgba(19,63,189,0.35)' : 'none',
+                                      }}
+                                    >
+                                      {/* Shimmer highlight */}
+                                      <div className="absolute inset-x-0 top-0 h-1/3 bg-white/10 rounded-t-lg" />
+                                      {/* Peak crown */}
+                                      {isPeak && (
+                                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px]">⭐</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* X-axis month labels */}
+                          <div className="ml-10 flex gap-2 mt-2">
+                            {billMonthlyData.map((item, i) => {
+                              const isPeak = vals[i] === Math.max(...vals);
+                              const isLast = i === billMonthlyData.length - 1;
+                              return (
+                                <div key={i} className="flex-1 text-center">
+                                  <span className={`text-[8px] font-extrabold uppercase tracking-wide ${
+                                    isPeak ? 'text-[#133fbd]' : isLast ? 'text-slate-600' : 'text-slate-300'
+                                  }`}>
+                                    {item.month}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Chart Footer */}
+                  <div className="px-5 py-3 border-t border-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-sm" style={{ background: 'linear-gradient(to top, #0f3299, #3b5ef5)' }} />
+                        <span className="text-[8px] font-bold text-slate-400">Peak Month</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-sm bg-blue-300/60" />
+                        <span className="text-[8px] font-bold text-slate-400">Other Months</span>
+                      </div>
                     </div>
-                  )}
+                    {billMonthlyData.length > 1 && (() => {
+                      const vals = billMonthlyData.map(d => parseFloat(d.collected || 0));
+                      const last = vals[vals.length - 1];
+                      const prev = vals[vals.length - 2];
+                      const pct  = prev > 0 ? Math.round(((last - prev) / prev) * 100) : 0;
+                      return (
+                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-extrabold ${pct >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                          {pct >= 0 ? '▲' : '▼'} {Math.abs(pct)}% vs prev month
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
+
 
                 {/* Overdue Payments Panel */}
                 <div className="bg-white border border-slate-200/60 p-5 rounded-2xl shadow-sm">

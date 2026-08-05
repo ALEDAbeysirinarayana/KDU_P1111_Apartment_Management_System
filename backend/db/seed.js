@@ -461,18 +461,86 @@ async function runSeed() {
       console.log('  Events and registrations seeded.');
     }
 
-    // 9. Seed Notices
+    // 9. Seed Notices (15 records across all categories, priorities & statuses)
     console.log('Seeding notices...');
     const [noticeCount] = await pool.query('SELECT COUNT(*) AS count FROM notices');
     if (noticeCount[0].count === 0) {
       const adminId = insertedUsersByRole['admin'];
-      await pool.query(`
-        INSERT INTO notices (notice_id, title, content, category, created_by, created_at, expiry_date, priority, audience, status) VALUES 
-        ('NOT-2024-001', 'Water Maintenance Shutdown',  'Scheduled water supply shutdown for tank cleaning in Tower A & B.', 'Utility', ?, '2026-10-24', '2026-10-26', 'urgent', 'Tower A, B',    'published'),
-        ('NOT-2024-005', 'Annual General Meeting 2026', 'Notice of the Annual General Meeting of the homeowner association.', 'Event',   ?, '2026-11-01', '2026-11-15', 'high',   'All Residents', 'scheduled'),
-        ('NOT-2023-142', 'New Gym Equipment Arrival',   'Modern treadmill and weights added to the resident gym center.',    'Amenity', ?, '2026-09-15', '2026-09-30', 'low',    'Active Members','expired')
-      `, [adminId, adminId, adminId]);
-      console.log('  Notices seeded.');
+      const staffId = insertedUsersByRole['staff'];
+
+      const notices = [
+        // notice_id, title, content, category, created_by, created_at, expiry_date, priority, audience, status
+        ['NOT-2024-001', 'Water Maintenance Shutdown',
+          'Scheduled water supply shutdown for tank cleaning in Block A & B. Residents are advised to store water in advance. The maintenance will last from 9:00 AM to 3:00 PM.',
+          'Utility', adminId, '2026-10-24', '2026-10-26', 'urgent', 'Block A, B', 'published'],
+
+        ['NOT-2024-002', 'CCTV System Upgrade – Temporary Blind Spots',
+          'Security cameras in the lobby, stairwells, and parking areas will be temporarily offline during the CCTV upgrade from October 28 to 30. Please report any incidents to the security desk directly.',
+          'Security', adminId, '2026-10-25', '2026-10-31', 'high', 'All Residents', 'published'],
+
+        ['NOT-2024-003', 'Elevator Maintenance – Block B',
+          'The main elevator in Block B will be undergoing routine maintenance on November 2nd between 10:00 AM and 2:00 PM. Only the staircase will be accessible. We apologise for the inconvenience.',
+          'Maintenance', staffId, '2026-10-28', '2026-11-02', 'medium', 'Block B', 'published'],
+
+        ['NOT-2024-004', 'Halloween Community Party',
+          'You are invited to the KDU Apartment Halloween Community Party on October 31st at 7:00 PM on the rooftop. Costumes are encouraged! Light refreshments will be served. RSVP at the management office.',
+          'Event', adminId, '2026-10-27', '2026-11-01', 'low', 'All Residents', 'published'],
+
+        ['NOT-2024-005', 'Annual General Meeting 2026',
+          'Notice of the Annual General Meeting of the Homeowner Association. Agenda includes budget review, election of committee members, and proposed by-law amendments. All homeowners are required to attend.',
+          'Event', adminId, '2026-11-01', '2026-11-15', 'high', 'Homeowners', 'scheduled'],
+
+        ['NOT-2024-006', 'Fire Safety Drill – All Blocks',
+          'A mandatory fire safety drill will be conducted on November 20th at 2:00 PM. All residents must evacuate via designated routes. The drill will last approximately 30 minutes. Please do not use elevators.',
+          'Safety', adminId, '2026-11-05', '2026-11-20', 'urgent', 'All Residents', 'scheduled'],
+
+        ['NOT-2024-007', 'Gym Equipment Upgrade',
+          'New treadmills, resistance machines, and free weights have been installed in the Resident Gym (FAC-004). The gym will reopen on November 10th after floor resurfacing. Thank you for your patience.',
+          'Amenity', staffId, '2026-11-07', '2026-11-30', 'low', 'All Residents', 'published'],
+
+        ['NOT-2024-008', 'Revised Guest Parking Policy',
+          'Effective December 1st, visitor parking requests must be submitted at least 24 hours in advance via the resident portal. Walk-in guest parking will no longer be permitted without prior approval.',
+          'Policy', adminId, '2026-11-10', '2026-12-31', 'high', 'All Residents', 'published'],
+
+        ['NOT-2024-009', 'Pest Control Treatment – Block C',
+          'A professional pest control treatment will be carried out in Block C on November 15th between 8:00 AM and 12:00 PM. All residents in Block C must vacate their units during this period.',
+          'Maintenance', staffId, '2026-11-11', '2026-11-16', 'high', 'Block C', 'scheduled'],
+
+        ['NOT-2024-010', 'New Year Rooftop Celebration',
+          'Ring in 2027 with your neighbours! The New Year Rooftop Celebration will be held on December 31st starting at 8:00 PM. Entry is free for all registered residents. Guest passes available at reception.',
+          'Event', adminId, '2026-11-20', '2027-01-01', 'medium', 'All Residents', 'scheduled'],
+
+        ['NOT-2024-011', 'Parking Lot Repainting – Block A',
+          'The parking lot lines and numbering in Block A will be repainted on November 18th. Vehicles must be moved by 7:00 AM. Vehicles not moved will be towed at the owner\'s expense.',
+          'Utility', staffId, '2026-11-14', '2026-11-18', 'medium', 'Block A', 'published'],
+
+        ['NOT-2024-012', 'Swimming Pool Temporarily Closed',
+          'The Main Swimming Pool (FAC-001) is temporarily closed for annual servicing and chemical balancing. Expected reopening is November 25th. The children\'s wading pool remains open.',
+          'Amenity', adminId, '2026-11-18', '2026-11-25', 'medium', 'All Residents', 'published'],
+
+        ['NOT-2023-142', 'New Gym Equipment Arrival',
+          'Modern treadmill and weights added to the resident gym center. The gym is now open 24 hours for all approved residents.',
+          'Amenity', adminId, '2026-09-15', '2026-09-30', 'low', 'Active Members', 'expired'],
+
+        ['NOT-2023-101', 'Community Clean-Up Day – September',
+          'Residents are invited to participate in the Community Clean-Up Day on September 5th at 9:00 AM. Gloves and cleaning supplies will be provided. Refreshments will be served after the event.',
+          'Event', staffId, '2026-08-25', '2026-09-05', 'low', 'All Residents', 'expired'],
+
+        ['NOT-2023-088', 'Internet Outage – Resolved',
+          'The internet outage affecting common areas and select units between August 10–12 has been fully resolved. A new fibre line has been installed. Please contact management if you are still experiencing issues.',
+          'Utility', adminId, '2026-08-12', '2026-08-20', 'medium', 'All Residents', 'archived'],
+      ];
+
+      for (const [noticeId, title, content, category, createdBy, createdAt, expiryDate, priority, audience, status] of notices) {
+        await pool.query(
+          `INSERT INTO notices (notice_id, title, content, category, created_by, created_at, expiry_date, priority, audience, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [noticeId, title, content, category, createdBy, createdAt, expiryDate, priority, audience, status]
+        );
+      }
+      console.log('  15 notices seeded.');
+    } else {
+      console.log(`  Skipped notices seeding (${noticeCount[0].count} already exist).`);
     }
 
     // 10. Seed Complaints & Maintenance Requests (20 records)
@@ -632,6 +700,89 @@ async function runSeed() {
       console.log('  10 visitor parking booking requests seeded.');
     } else {
       console.log(`  Skipped visitor parking (already ${guestParkingCount[0][0].count} guest records).`);
+    }
+
+    // 14. Seed Bills & Payment Transactions (25 invoices + transactions)
+    console.log('Seeding bills & payment transactions...');
+    const [billCount] = await pool.query('SELECT COUNT(*) AS count FROM bills');
+    if (billCount[0].count === 0) {
+
+      // Build unit_id lookup from unit_number
+      const [allUnits] = await pool.query('SELECT id, unit_number, owner_id, tenant_id FROM units');
+      const unitIdMap   = {};   // unit_number → unit db id
+      const unitUserMap = {};   // unit_number → resident user id (owner or tenant)
+      for (const u of allUnits) {
+        unitIdMap[u.unit_number]   = u.id;
+        unitUserMap[u.unit_number] = u.tenant_id || u.owner_id;
+      }
+
+      // Bills data: [unit_number, amount, description, due_date, status, payment_method, paid_at]
+      const bills = [
+        // ── Fully PAID bills (historical – feed the monthly chart) ──────────
+        ['A01', 18500, 'Monthly Maintenance Fee – March 2026',      '2026-03-05', 'paid', 'Bank Transfer',   '2026-03-04'],
+        ['A02', 18500, 'Monthly Maintenance Fee – March 2026',      '2026-03-05', 'paid', 'Online Payment',  '2026-03-05'],
+        ['A03', 18500, 'Monthly Maintenance Fee – April 2026',      '2026-04-05', 'paid', 'Card',            '2026-04-03'],
+        ['B01', 19500, 'Monthly Maintenance Fee – April 2026',      '2026-04-05', 'paid', 'Bank Transfer',   '2026-04-05'],
+        ['B02', 19500, 'Monthly Maintenance Fee – May 2026',        '2026-05-05', 'paid', 'Online Payment',  '2026-05-04'],
+        ['C01', 21000, 'Monthly Maintenance Fee – May 2026',        '2026-05-05', 'paid', 'Card',            '2026-05-05'],
+        ['A01', 18500, 'Monthly Maintenance Fee – June 2026',       '2026-06-05', 'paid', 'Bank Transfer',   '2026-06-04'],
+        ['A02', 18500, 'Monthly Maintenance Fee – June 2026',       '2026-06-05', 'paid', 'Online Payment',  '2026-06-05'],
+        ['B03', 19500, 'Monthly Maintenance Fee – June 2026',       '2026-06-05', 'paid', 'Cash',            '2026-06-03'],
+        ['C02', 21000, 'Monthly Maintenance Fee – July 2026',       '2026-07-05', 'paid', 'Bank Transfer',   '2026-07-04'],
+        ['A03', 18500, 'Monthly Maintenance Fee – July 2026',       '2026-07-05', 'paid', 'Card',            '2026-07-05'],
+        ['B01', 19500, 'Monthly Maintenance Fee – July 2026',       '2026-07-05', 'paid', 'Online Payment',  '2026-07-03'],
+        ['A01', 3500,  'Water Usage Surcharge – Q2 2026',           '2026-07-15', 'paid', 'Bank Transfer',   '2026-07-14'],
+        ['B02', 4200,  'AC Servicing & Deep Cleaning – Unit B02',   '2026-07-20', 'paid', 'Online Payment',  '2026-07-19'],
+        ['C03', 6500,  'Balcony Repair & Waterproofing – C03',      '2026-07-25', 'paid', 'Bank Transfer',   '2026-07-24'],
+
+        // ── UNPAID – current month (not yet overdue) ────────────────────────
+        ['A01', 18500, 'Monthly Maintenance Fee – August 2026',     '2026-08-10', 'unpaid', 'Bank Transfer',  null],
+        ['A02', 18500, 'Monthly Maintenance Fee – August 2026',     '2026-08-10', 'unpaid', 'Bank Transfer',  null],
+        ['B01', 19500, 'Monthly Maintenance Fee – August 2026',     '2026-08-10', 'unpaid', 'Bank Transfer',  null],
+        ['C01', 21000, 'Monthly Maintenance Fee – August 2026',     '2026-08-10', 'unpaid', 'Bank Transfer',  null],
+        ['C04', 21000, 'Monthly Maintenance Fee – August 2026',     '2026-08-10', 'unpaid', 'Bank Transfer',  null],
+
+        // ── OVERDUE bills (past due_date, still unpaid) ──────────────────────
+        ['B04', 19500, 'Monthly Maintenance Fee – June 2026',       '2026-06-05', 'unpaid', 'Bank Transfer',  null],
+        ['C02', 21000, 'Monthly Maintenance Fee – June 2026',       '2026-06-05', 'unpaid', 'Bank Transfer',  null],
+        ['A04', 18500, 'Monthly Maintenance Fee – July 2026',       '2026-07-05', 'unpaid', 'Bank Transfer',  null],
+        ['B03', 5800,  'Plumbing Repair – Burst Pipe Unit B03',     '2026-07-20', 'unpaid', 'Bank Transfer',  null],
+        ['C03', 2500,  'Pest Control Treatment Fee – Block C',      '2026-07-28', 'unpaid', 'Bank Transfer',  null],
+      ];
+
+      const insertedBills = [];
+      for (let i = 0; i < bills.length; i++) {
+        const [unitNum, amount, description, dueDate, status, payMethod, paidAt] = bills[i];
+        const unitId = unitIdMap[unitNum];
+        if (!unitId) { console.log(`  Skipped – unit ${unitNum} not found`); continue; }
+
+        const invId = `INV-${String(i + 1).padStart(4, '0')}`;
+        const [res] = await pool.query(
+          `INSERT INTO bills (invoice_id, unit_id, amount, description, due_date, status, payment_method, paid_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [invId, unitId, amount, description, dueDate, status, payMethod, paidAt || null]
+        );
+        insertedBills.push({ id: res.insertId, invId, unitNum, unitId, amount, status, payMethod, paidAt, description });
+      }
+      console.log(`  ${insertedBills.length} bills inserted.`);
+
+      // Create payment_transactions for every paid bill
+      const paidBills = insertedBills.filter(b => b.status === 'paid');
+      for (let i = 0; i < paidBills.length; i++) {
+        const b = paidBills[i];
+        const userId = unitUserMap[b.unitNum];
+        if (!userId) continue;
+        const txId = `TRX-SEED-${String(i + 1).padStart(4, '0')}`;
+        await pool.query(
+          `INSERT IGNORE INTO payment_transactions
+             (transaction_id, bill_id, unit_id, user_id, amount, method, status, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'successful', ?, ?)`,
+          [txId, b.id, b.unitId, userId, b.amount, b.payMethod, `Seed payment for ${b.invId}`, b.paidAt + ' 10:00:00']
+        );
+      }
+      console.log(`  ${paidBills.length} payment transactions inserted.`);
+    } else {
+      console.log(`  Skipped bills seeding (${billCount[0].count} already exist).`);
     }
 
     console.log('\n✅ Database migration and seeding completed successfully!');
