@@ -109,12 +109,12 @@ const getBills = async (req, res) => {
         total: totalRes[0].count,
         page: parseInt(page),
         metrics: {
-          totalInvoices: (metricsRes.totalInvoices || 0) + 1249,
-          paymentsCollected: parseFloat(metricsRes.paymentsCollected || 0) + 45000,
-          pendingAmount: parseFloat(metricsRes.pendingAmount || 0) + 8200,
-          pendingCount: (metricsRes.pendingCount || 0) + 41,
-          overdueAmount: parseFloat(metricsRes.overdueAmount || 0) + 2050,
-          overdueCount: (metricsRes.overdueCount || 0) + 11
+          totalInvoices: metricsRes.totalInvoices || 0,
+          paymentsCollected: parseFloat(metricsRes.paymentsCollected || 0),
+          pendingAmount: parseFloat(metricsRes.pendingAmount || 0),
+          pendingCount: metricsRes.pendingCount || 0,
+          overdueAmount: parseFloat(metricsRes.overdueAmount || 0),
+          overdueCount: metricsRes.overdueCount || 0
         },
         monthlyCollection: monthlyData,
         overdueList,

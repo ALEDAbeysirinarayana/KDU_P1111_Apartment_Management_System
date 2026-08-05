@@ -53,11 +53,10 @@ const getNotices = async (req, res) => {
       FROM notices
     `);
 
-    // Let's add screenshot values as baseline offset to make the dashboard look populated
-    const totalNotices = (metricsRes.total || 0) + 1245;
-    const activeNotices = (metricsRes.active || 0) + 40;
-    const scheduledNotices = (metricsRes.scheduled || 0) + 10;
-    const archivedNotices = (metricsRes.archived || 0) + 1195;
+    const totalNotices = metricsRes.total || 0;
+    const activeNotices = metricsRes.active || 0;
+    const scheduledNotices = metricsRes.scheduled || 0;
+    const archivedNotices = metricsRes.archived || 0;
 
     // Notice distribution (by category)
     const [[distributionRes]] = await pool.query(`
@@ -71,12 +70,11 @@ const getNotices = async (req, res) => {
 
     const totalDist = (distributionRes.utility || 0) + (distributionRes.events || 0) + (distributionRes.security || 0) + (distributionRes.other || 0) || 1;
     
-    // Fallback/standard percentages matching mockup if database is small, or compute dynamically
     const distribution = {
-      utility: Math.round(((distributionRes.utility || 0) / totalDist) * 100) || 45,
-      events: Math.round(((distributionRes.events || 0) / totalDist) * 100) || 30,
-      security: Math.round(((distributionRes.security || 0) / totalDist) * 100) || 15,
-      other: Math.round(((distributionRes.other || 0) / totalDist) * 100) || 10
+      utility: Math.round(((distributionRes.utility || 0) / totalDist) * 100),
+      events: Math.round(((distributionRes.events || 0) / totalDist) * 100),
+      security: Math.round(((distributionRes.security || 0) / totalDist) * 100),
+      other: Math.round(((distributionRes.other || 0) / totalDist) * 100)
     };
 
     // Notice Activity log items

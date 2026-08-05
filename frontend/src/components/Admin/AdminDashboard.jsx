@@ -103,7 +103,7 @@ export default function AdminDashboard() {
   const [bills, setBills] = useState([]);
   const [billsTotal, setBillsTotal] = useState(0);
   const [billsPage, setBillsPage] = useState(1);
-  const [billMetrics, setBillMetrics] = useState({ totalInvoices: 1250, paymentsCollected: 45200, pendingAmount: 8400, pendingCount: 42, overdueAmount: 2150, overdueCount: 12 });
+  const [billMetrics, setBillMetrics] = useState({ totalInvoices: 0, paymentsCollected: 0, pendingAmount: 0, pendingCount: 0, overdueAmount: 0, overdueCount: 0 });
   const [billMonthlyData, setBillMonthlyData] = useState([]);
   const [overdueList, setOverdueList] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -115,8 +115,8 @@ export default function AdminDashboard() {
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
   const [recordPaymentForm, setRecordPaymentForm] = useState({ billId: '', payment_method: 'Bank Transfer', notes: '' });
   const [notices, setNotices] = useState([]);
-  const [noticeMetrics, setNoticeMetrics] = useState({ totalNotices: 1248, activeNotices: 42, scheduledNotices: 12, archivedNotices: 1194 });
-  const [noticeDistribution, setNoticeDistribution] = useState({ utility: 45, events: 30, security: 15, other: 10 });
+  const [noticeMetrics, setNoticeMetrics] = useState({ totalNotices: 0, activeNotices: 0, scheduledNotices: 0, archivedNotices: 0 });
+  const [noticeDistribution, setNoticeDistribution] = useState({ utility: 0, events: 0, security: 0, other: 0 });
   const [noticeActivities, setNoticeActivities] = useState([]);
   const [noticeSearchQuery, setNoticeSearchQuery] = useState('');
   const [noticeStatusFilter, setNoticeStatusFilter] = useState('All');
@@ -313,8 +313,8 @@ export default function AdminDashboard() {
           }
         });
         setNotices(noticesRes.data.notices || []);
-        setNoticeMetrics(noticesRes.data.metrics || { totalNotices: 1248, activeNotices: 42, scheduledNotices: 12, archivedNotices: 1194 });
-        setNoticeDistribution(noticesRes.data.distribution || { utility: 45, events: 30, security: 15, other: 10 });
+        setNoticeMetrics(noticesRes.data.metrics || { totalNotices: 0, activeNotices: 0, scheduledNotices: 0, archivedNotices: 0 });
+        setNoticeDistribution(noticesRes.data.distribution || { utility: 0, events: 0, security: 0, other: 0 });
         setNoticeActivities(noticesRes.data.activities || []);
       } else if (activeTab === 'bills') {
         const billsRes = await api.get('/bills', {
