@@ -262,49 +262,49 @@ async function runSeed() {
       { email: 'admin@apartment.com',       password: 'AdminPass123!',       role: 'admin',       status: 'approved', fullName: 'System Admin', phone: '+94 77 000 0001' },
       { email: 'staff@apartment.com',       password: 'StaffPass123!',       role: 'staff',       status: 'approved', fullName: 'Primary Staff', phone: '+94 77 000 0002' },
       { email: 'maintenance@apartment.com', password: 'MaintenancePass123!', role: 'maintenance', status: 'approved', fullName: 'Chief Technician', phone: '+94 77 000 0003' },
-      { email: 'homeowner@apartment.com',   password: 'OwnerPass123!',       role: 'homeowner',   status: 'approved', fullName: 'Primary Homeowner', building: 'Block A', unit: 'A01', phone: '+94 77 301 0001', nic: 'NIC882001001V', vehicle: 'WP-CAB-1001' },
+      { email: 'homeowner@apartment.com',   password: 'OwnerPass123!',       role: 'homeowner',   status: 'approved', fullName: 'Amila Perera', building: 'Block A', unit: 'A01', phone: '+94 77 301 0001', nic: 'NIC882001001V', vehicle: 'WP-CAB-1001' },
 
       // 20 Additional Seed Users
       // Additional Staff & Maintenance
-      { email: 'staff.sarah@apartment.com', password: 'StaffPass123!',       role: 'staff',       status: 'approved', fullName: 'Sarah Jenkins', phone: '+94 77 111 2233' },
-      { email: 'maint.alex@apartment.com',  password: 'MaintenancePass123!', role: 'maintenance', status: 'approved', fullName: 'Alex Rivera', phone: '+94 77 222 3344' },
+      { email: 'staff.sarah@apartment.com', password: 'StaffPass123!',       role: 'staff',       status: 'approved', fullName: 'Kumari Silva', phone: '+94 77 111 2233' },
+      { email: 'maint.alex@apartment.com',  password: 'MaintenancePass123!', role: 'maintenance', status: 'approved', fullName: 'Sunil Wickramasinghe', phone: '+94 77 222 3344' },
 
       // Additional Homeowners (11)
-      { email: 'owner.smith@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'John Smith',       building: 'Block A', unit: 'A02', phone: '+94 77 301 0002', nic: 'NIC882001002V', vehicle: 'WP-CAB-1002' },
-      { email: 'owner.johnson@apartment.com',   password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Robert Johnson',   building: 'Block A', unit: 'A03', phone: '+94 77 301 0003', nic: 'NIC882001003V', vehicle: 'WP-CAB-1003' },
-      { email: 'owner.williams@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Emily Williams',   building: 'Block A', unit: 'A04', phone: '+94 77 301 0004', nic: 'NIC882001004V', vehicle: 'WP-CAB-1004' },
-      { email: 'owner.brown@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Michael Brown',    building: 'Block B', unit: 'B01', phone: '+94 77 302 0001', nic: 'NIC882002001V', vehicle: 'WP-CAB-2001' },
-      { email: 'owner.jones@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Jessica Jones',    building: 'Block B', unit: 'B02', phone: '+94 77 302 0002', nic: 'NIC882002002V', vehicle: 'WP-CAB-2002' },
-      { email: 'owner.garcia@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Carlos Garcia',    building: 'Block B', unit: 'B03', phone: '+94 77 302 0003', nic: 'NIC882002003V', vehicle: 'WP-CAB-2003' },
-      { email: 'owner.miller@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'David Miller',     building: 'Block B', unit: 'B04', phone: '+94 77 302 0004', nic: 'NIC882002004V', vehicle: 'WP-CAB-2004' },
-      { email: 'owner.davis@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Amanda Davis',     building: 'Block C', unit: 'C01', phone: '+94 77 303 0001', nic: 'NIC882003001V', vehicle: 'WP-CAB-3001' },
-      { email: 'owner.rodriguez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Sofia Rodriguez',  building: 'Block C', unit: 'C02', phone: '+94 77 303 0002', nic: 'NIC882003002V', vehicle: 'WP-CAB-3002' },
-      { email: 'owner.martinez@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Daniel Martinez',  building: 'Block C', unit: 'C03', phone: '+94 77 303 0003', nic: 'NIC882003003V', vehicle: 'WP-CAB-3003' },
-      { email: 'owner.hernandez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'James Hernandez',  building: 'Block C', unit: 'C04', phone: '+94 77 303 0004', nic: 'NIC882003004V', vehicle: 'WP-CAB-3004' },
+      { email: 'owner.smith@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Dilani Fernando',       building: 'Block A', unit: 'A02', phone: '+94 77 301 0002', nic: 'NIC882001002V', vehicle: 'WP-CAB-1002' },
+      { email: 'owner.johnson@apartment.com',   password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Nuwan Rathnayake',   building: 'Block A', unit: 'A03', phone: '+94 77 301 0003', nic: 'NIC882001003V', vehicle: 'WP-CAB-1003' },
+      { email: 'owner.williams@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Chamari Weerasinghe',   building: 'Block A', unit: 'A04', phone: '+94 77 301 0004', nic: 'NIC882001004V', vehicle: 'WP-CAB-1004' },
+      { email: 'owner.brown@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Gamini Perera',    building: 'Block B', unit: 'B01', phone: '+94 77 302 0001', nic: 'NIC882002001V', vehicle: 'WP-CAB-2001' },
+      { email: 'owner.jones@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Nilanthi Silva',    building: 'Block B', unit: 'B02', phone: '+94 77 302 0002', nic: 'NIC882002002V', vehicle: 'WP-CAB-2002' },
+      { email: 'owner.garcia@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Sampath Jayawardena',    building: 'Block B', unit: 'B03', phone: '+94 77 302 0003', nic: 'NIC882002003V', vehicle: 'WP-CAB-2003' },
+      { email: 'owner.miller@apartment.com',    password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Anoma Bandara',     building: 'Block B', unit: 'B04', phone: '+94 77 302 0004', nic: 'NIC882002004V', vehicle: 'WP-CAB-2004' },
+      { email: 'owner.davis@apartment.com',     password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Lasantha Kumara',     building: 'Block C', unit: 'C01', phone: '+94 77 303 0001', nic: 'NIC882003001V', vehicle: 'WP-CAB-3001' },
+      { email: 'owner.rodriguez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Kanthi Jayasinghe',  building: 'Block C', unit: 'C02', phone: '+94 77 303 0002', nic: 'NIC882003002V', vehicle: 'WP-CAB-3002' },
+      { email: 'owner.martinez@apartment.com',  password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Ranjith Mendis',  building: 'Block C', unit: 'C03', phone: '+94 77 303 0003', nic: 'NIC882003003V', vehicle: 'WP-CAB-3003' },
+      { email: 'owner.hernandez@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'approved', fullName: 'Dammika Rajapaksa',  building: 'Block C', unit: 'C04', phone: '+94 77 303 0004', nic: 'NIC882003004V', vehicle: 'WP-CAB-3004' },
 
       // Additional Tenants (7)
-      { email: 'tenant.wilson@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Mark Wilson',     building: 'Block A', unit: 'A01', ownerEmail: 'homeowner@apartment.com',       relationship: 'Primary Tenant', phone: '+94 77 401 0001', nic: 'NIC991001001V' },
-      { email: 'tenant.anderson@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Chloe Anderson',  building: 'Block A', unit: 'A02', ownerEmail: 'owner.smith@apartment.com',     relationship: 'Tenant',         phone: '+94 77 401 0002', nic: 'NIC991001002V' },
-      { email: 'tenant.taylor@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Ryan Taylor',     building: 'Block A', unit: 'A03', ownerEmail: 'owner.johnson@apartment.com',   relationship: 'Family Member',  phone: '+94 77 401 0003', nic: 'NIC991001003V' },
-      { email: 'tenant.thomas@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Matthew Thomas',  building: 'Block B', unit: 'B01', ownerEmail: 'owner.brown@apartment.com',     relationship: 'Tenant',         phone: '+94 77 402 0001', nic: 'NIC991002001V' },
-      { email: 'tenant.white@apartment.com',    password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Olivia White',    building: 'Block B', unit: 'B02', ownerEmail: 'owner.jones@apartment.com',     relationship: 'Roommate',       phone: '+94 77 402 0002', nic: 'NIC991002002V' },
-      { email: 'tenant.harris@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Joshua Harris',   building: 'Block C', unit: 'C01', ownerEmail: 'owner.davis@apartment.com',     relationship: 'Tenant',         phone: '+94 77 403 0001', nic: 'NIC991003001V' },
-      { email: 'tenant.martin@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Sophia Martin',   building: 'Block C', unit: 'C02', ownerEmail: 'owner.rodriguez@apartment.com', relationship: 'Tenant',         phone: '+94 77 403 0002', nic: 'NIC991003002V' },
+      { email: 'tenant.wilson@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Chandana Kumara',     building: 'Block A', unit: 'A01', ownerEmail: 'homeowner@apartment.com',       relationship: 'Primary Tenant', phone: '+94 77 401 0001', nic: 'NIC991001001V' },
+      { email: 'tenant.anderson@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Samanthi Weerakoon',  building: 'Block A', unit: 'A02', ownerEmail: 'owner.smith@apartment.com',     relationship: 'Tenant',         phone: '+94 77 401 0002', nic: 'NIC991001002V' },
+      { email: 'tenant.taylor@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Ruwan Dias',     building: 'Block A', unit: 'A03', ownerEmail: 'owner.johnson@apartment.com',   relationship: 'Family Member',  phone: '+94 77 401 0003', nic: 'NIC991001003V' },
+      { email: 'tenant.thomas@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Nalin Gunasekara',  building: 'Block B', unit: 'B01', ownerEmail: 'owner.brown@apartment.com',     relationship: 'Tenant',         phone: '+94 77 402 0001', nic: 'NIC991002001V' },
+      { email: 'tenant.white@apartment.com',    password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Dinesh Perera',    building: 'Block B', unit: 'B02', ownerEmail: 'owner.jones@apartment.com',     relationship: 'Roommate',       phone: '+94 77 402 0002', nic: 'NIC991002002V' },
+      { email: 'tenant.harris@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Jagath Wickramasinghe',   building: 'Block C', unit: 'C01', ownerEmail: 'owner.davis@apartment.com',     relationship: 'Tenant',         phone: '+94 77 403 0001', nic: 'NIC991003001V' },
+      { email: 'tenant.martin@apartment.com',   password: 'TenantPass123!', role: 'tenant', status: 'approved', fullName: 'Sumithra Jayawardena',   building: 'Block C', unit: 'C02', ownerEmail: 'owner.rodriguez@apartment.com', relationship: 'Tenant',         phone: '+94 77 403 0002', nic: 'NIC991003002V' },
 
       // 10 Pending User Registrations (Awaiting Admin / Staff Approval)
       // Pending Homeowners (5)
-      { email: 'pending.owner1@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Alexander Wright', building: 'Block A', unit: 'A05', phone: '+94 77 501 0001', nic: 'NIC992001001V', vehicle: 'WP-CAB-5001' },
-      { email: 'pending.owner2@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Isabella Scott',    building: 'Block A', unit: 'A06', phone: '+94 77 501 0002', nic: 'NIC992001002V', vehicle: 'WP-CAB-5002' },
-      { email: 'pending.owner3@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Benjamin Green',    building: 'Block B', unit: 'B05', phone: '+94 77 502 0001', nic: 'NIC992002001V', vehicle: 'WP-CAB-5003' },
-      { email: 'pending.owner4@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Charlotte Adams',   building: 'Block B', unit: 'B06', phone: '+94 77 502 0002', nic: 'NIC992002002V', vehicle: 'WP-CAB-5004' },
-      { email: 'pending.owner5@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Lucas Baker',       building: 'Block C', unit: 'C05', phone: '+94 77 503 0001', nic: 'NIC992003001V', vehicle: 'WP-CAB-5005' },
+      { email: 'pending.owner1@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Mahesh Weerasinghe', building: 'Block A', unit: 'A05', phone: '+94 77 501 0001', nic: 'NIC992001001V', vehicle: 'WP-CAB-5001' },
+      { email: 'pending.owner2@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Kamala Perera',    building: 'Block A', unit: 'A06', phone: '+94 77 501 0002', nic: 'NIC992001002V', vehicle: 'WP-CAB-5002' },
+      { email: 'pending.owner3@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Piyal Samarasinghe',    building: 'Block B', unit: 'B05', phone: '+94 77 502 0001', nic: 'NIC992002001V', vehicle: 'WP-CAB-5003' },
+      { email: 'pending.owner4@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Nadeeka Bandara',   building: 'Block B', unit: 'B06', phone: '+94 77 502 0002', nic: 'NIC992002002V', vehicle: 'WP-CAB-5004' },
+      { email: 'pending.owner5@apartment.com', password: 'OwnerPass123!', role: 'homeowner', status: 'pending', fullName: 'Chandrika Silva',       building: 'Block C', unit: 'C05', phone: '+94 77 503 0001', nic: 'NIC992003001V', vehicle: 'WP-CAB-5005' },
 
       // Pending Tenants (5)
-      { email: 'pending.tenant1@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Mia Nelson',       building: 'Block A', unit: 'A04', ownerEmail: 'owner.williams@apartment.com',  relationship: 'Tenant',        phone: '+94 77 601 0001', nic: 'NIC993001001V' },
-      { email: 'pending.tenant2@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Ethan Carter',     building: 'Block B', unit: 'B03', ownerEmail: 'owner.garcia@apartment.com',    relationship: 'Tenant',        phone: '+94 77 602 0001', nic: 'NIC993002001V' },
-      { email: 'pending.tenant3@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Harper Mitchell', building: 'Block B', unit: 'B04', ownerEmail: 'owner.miller@apartment.com',     relationship: 'Roommate',      phone: '+94 77 602 0002', nic: 'NIC993002002V' },
-      { email: 'pending.tenant4@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Mason Perez',      building: 'Block C', unit: 'C03', ownerEmail: 'owner.martinez@apartment.com', relationship: 'Tenant',        phone: '+94 77 603 0001', nic: 'NIC993003001V' },
-      { email: 'pending.tenant5@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Evelyn Roberts',   building: 'Block C', unit: 'C04', ownerEmail: 'owner.hernandez@apartment.com',relationship: 'Family Member', phone: '+94 77 603 0002', nic: 'NIC993003002V' }
+      { email: 'pending.tenant1@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Sarath Gunasekara',       building: 'Block A', unit: 'A04', ownerEmail: 'owner.williams@apartment.com',  relationship: 'Tenant',        phone: '+94 77 601 0001', nic: 'NIC993001001V' },
+      { email: 'pending.tenant2@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Menaka Jayawardena',     building: 'Block B', unit: 'B03', ownerEmail: 'owner.garcia@apartment.com',    relationship: 'Tenant',        phone: '+94 77 602 0001', nic: 'NIC993002001V' },
+      { email: 'pending.tenant3@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Sujeewa Rathnayake', building: 'Block B', unit: 'B04', ownerEmail: 'owner.miller@apartment.com',     relationship: 'Roommate',      phone: '+94 77 602 0002', nic: 'NIC993002002V' },
+      { email: 'pending.tenant4@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Lalith Kumara',      building: 'Block C', unit: 'C03', ownerEmail: 'owner.martinez@apartment.com', relationship: 'Tenant',        phone: '+94 77 603 0001', nic: 'NIC993003001V' },
+      { email: 'pending.tenant5@apartment.com', password: 'TenantPass123!', role: 'tenant', status: 'pending', fullName: 'Kusum Fernando',   building: 'Block C', unit: 'C04', ownerEmail: 'owner.hernandez@apartment.com',relationship: 'Family Member', phone: '+94 77 603 0002', nic: 'NIC993003002V' }
     ];
 
     const insertedUsersByEmail = {};
@@ -675,16 +675,16 @@ async function runSeed() {
     if (guestParkingCount[0][0].count === 0) {
       const guestBookings = [
         // [unit_number, slot_number, guest_date, visitor_name, visitor_vehicle, arrival_time, reason, status]
-        ['A01', 'G-001', '2026-08-10', 'James Walker',      'WP-JKL-1234', '09:00 AM', 'Parent visiting for the weekend',       'approved'],
-        ['A02', 'G-002', '2026-08-11', 'Sarah Connor',      'CP-MNO-5678', '10:30 AM', 'Friend visiting for a day trip',         'approved'],
-        ['A03', 'G-003', '2026-08-12', 'Tom Bradley',       'NW-PQR-9012', '08:00 AM', 'Service technician – appliance repair',  'pending'],
-        ['B01', 'G-004', '2026-08-13', 'Linda Foster',      'WP-STU-3456', '11:00 AM', 'Relative staying for 2 nights',          'pending'],
-        ['B02', 'G-005', '2026-08-14', 'George Perez',      'CP-VWX-7890', '02:00 PM', 'Friend attending a birthday party',      'approved'],
-        ['B03', 'G-006', '2026-08-15', 'Nancy Kim',         'WP-YZA-1122', '12:00 PM', 'Doctor home visit',                      'pending'],
-        ['B04', 'G-001', '2026-08-17', 'David Chen',        'NW-BCD-3344', '04:00 PM', 'Moving furniture assistance',            'approved'],
-        ['C01', 'G-002', '2026-08-18', 'Priya Sharma',      'WP-EFG-5566', '09:30 AM', 'Catering for a private dinner',          'rejected'],
-        ['C02', 'G-003', '2026-08-19', 'Michael Torres',    'CP-HIJ-7788', '01:00 PM', 'Tutor visiting for weekly lesson',       'pending'],
-        ['C03', 'G-004', '2026-08-20', 'Rachel Green',      'WP-KLM-9900', '03:00 PM', 'Courier delivery – large parcels',      'pending'],
+        ['A01', 'G-001', '2026-08-10', 'Sunil Perera',      'WP-JKL-1234', '09:00 AM', 'Parent visiting for the weekend',       'approved'],
+        ['A02', 'G-002', '2026-08-11', 'Chandrika Weerasinghe',      'CP-MNO-5678', '10:30 AM', 'Friend visiting for a day trip',         'approved'],
+        ['A03', 'G-003', '2026-08-12', 'Gamini Fernando',       'NW-PQR-9012', '08:00 AM', 'Service technician – appliance repair',  'pending'],
+        ['B01', 'G-004', '2026-08-13', 'Menaka Jayawardena',      'WP-STU-3456', '11:00 AM', 'Relative staying for 2 nights',          'pending'],
+        ['B02', 'G-005', '2026-08-14', 'Dilani Silva',      'CP-VWX-7890', '02:00 PM', 'Friend attending a birthday party',      'approved'],
+        ['B03', 'G-006', '2026-08-15', 'Lalith Kumara',         'WP-YZA-1122', '12:00 PM', 'Doctor home visit',                      'pending'],
+        ['B04', 'G-001', '2026-08-17', 'Ruwan Wickramasinghe',        'NW-BCD-3344', '04:00 PM', 'Moving furniture assistance',            'approved'],
+        ['C01', 'G-002', '2026-08-18', 'Samanthi Perera',      'WP-EFG-5566', '09:30 AM', 'Catering for a private dinner',          'rejected'],
+        ['C02', 'G-003', '2026-08-19', 'Nalin Bandara',    'CP-HIJ-7788', '01:00 PM', 'Tutor visiting for weekly lesson',       'pending'],
+        ['C03', 'G-004', '2026-08-20', 'Nilanthi Fernando',      'WP-KLM-9900', '03:00 PM', 'Courier delivery – large parcels',      'pending'],
       ];
 
       for (const [unitNum, slot, gDate, vName, vVehicle, arrTime, reason, status] of guestBookings) {
