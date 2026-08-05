@@ -191,8 +191,9 @@ export default function Login() {
                     >
                       <option value="tenant">Tenant</option>
                       <option value="homeowner">Homeowner</option>
+                      <option value="staff">Staff</option>
+                      <option value="maintenance">Maintenance Staff</option>
                       <option value="admin">Admin</option>
-                      <option value="staff">Maintenance Staff</option>
                     </select>
                     <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
