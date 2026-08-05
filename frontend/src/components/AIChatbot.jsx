@@ -57,13 +57,13 @@ export default function AIChatbot() {
     '☎️ Contact Support'
   ];
 
-  // Initial welcome message
+  // Initial state when first opened: NO message text, ONLY Option Chips
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: 'bot',
-      text: `Hello! 👋 I'm **Aura Smart AI Assistant**.\n\n${SYSTEM_MENU_TEXT}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: '',
+      time: '',
       suggestions: MAIN_SUGGESTIONS
     }
   ]);
@@ -83,7 +83,39 @@ export default function AIChatbot() {
   const generateResponse = async (userQuery) => {
     const query = userQuery.toLowerCase().trim();
 
-    // 1. Greetings (Hi, Hello, Hey, etc.) -> Greet + Show All Options & Sub-Options
+    // 1. "How are you?" / "How are you doing?"
+    if (/(how are you|how r u|how do you do|how are u)/.test(query)) {
+      return {
+        text: `I'm doing great, thank you for asking! 😊 I'm fully operational and ready to assist you with the Aura Apartment Management System.\n\nHow can I help you today?\n\n${SYSTEM_MENU_TEXT}`,
+        suggestions: MAIN_SUGGESTIONS
+      };
+    }
+
+    // 2. "What's up?" / "Sup?"
+    if (/(what's up|whats up|what up|sup|wsp)/.test(query)) {
+      return {
+        text: `Not much! Just monitoring apartment units, maintenance tickets, and helping residents. 🏢\n\nHere is how I can assist you today:\n\n${SYSTEM_MENU_TEXT}`,
+        suggestions: MAIN_SUGGESTIONS
+      };
+    }
+
+    // 3. "How old are you?" / "Who built you?"
+    if (/(how old|your age|who created|who built|who made|who are you)/.test(query)) {
+      return {
+        text: `I am Aura AI, built specifically as the intelligent assistant for the Aura Apartment Management System! 🤖 I may be digital, but I know everything about this apartment system.\n\nHere is what I can help you with:\n\n${SYSTEM_MENU_TEXT}`,
+        suggestions: MAIN_SUGGESTIONS
+      };
+    }
+
+    // 4. "Can you help me?" / "Help" / "I need help"
+    if (/(can you help|help me|need help|can u help|assistance|help)/.test(query)) {
+      return {
+        text: `I'd be glad to help you! 😊 I can assist you with system stats, user details, submitting complaints, booking facilities, paying bills, or contacting support.\n\nHere are all available options:\n\n${SYSTEM_MENU_TEXT}`,
+        suggestions: MAIN_SUGGESTIONS
+      };
+    }
+
+    // 5. Greetings (Hi, Hello, Hey, etc.)
     if (/^(hi|hello|hey|greetings|good morning|good afternoon|good evening|hi there|hey there)/.test(query)) {
       const nameGreeting = user ? `, ${user.full_name || user.role}` : '';
       return {
@@ -377,81 +409,85 @@ export default function AIChatbot() {
                     key={msg.id}
                     className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
                   >
-                    <div
-                      className={`max-w-[88%] p-3.5 rounded-2xl shadow-xs text-xs leading-relaxed ${
-                        msg.sender === 'user'
-                          ? 'bg-[#133fbd] text-white rounded-br-none'
-                          : 'bg-white text-slate-800 border border-slate-200/70 rounded-bl-none'
-                      }`}
-                    >
-                      {/* Markdown text parsing */}
-                      <div className="whitespace-pre-line">
-                        {msg.text.split('\n').map((line, idx) => {
-                          const parts = line.split(/(\*\*.*?\*\*|\`.*?\`)/g);
-                          return (
-                            <div key={idx} className={idx > 0 ? 'mt-1' : ''}>
-                              {parts.map((part, pIdx) => {
-                                if (part.startsWith('**') && part.endsWith('**')) {
-                                  return <strong key={pIdx} className="font-extrabold text-slate-900">{part.slice(2, -2)}</strong>;
-                                }
-                                if (part.startsWith('`') && part.endsWith('`')) {
-                                  return <code key={pIdx} className="bg-blue-50 text-blue-800 border border-blue-200/60 font-mono px-1.5 py-0.5 rounded text-[11px] font-bold">{part.slice(1, -1)}</code>;
-                                }
-                                return part;
-                              })}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Direct Contact Links */}
-                      {msg.contactLinks && (
-                        <div className="mt-3 space-y-2 border-t border-slate-100 pt-2.5">
-                          <a
-                            href="mailto:apartmentmanagementsystem123@gmail.com"
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold rounded-xl border border-blue-200/70 transition shadow-2xs"
-                          >
-                            <Mail className="w-4 h-4 text-blue-600 shrink-0" />
-                            <span>Send Email Support</span>
-                          </a>
-                          <a
-                            href="https://wa.me/94110123321"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-xl border border-emerald-200/70 transition shadow-2xs"
-                          >
-                            <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>Chat on WhatsApp (+94 11 0123 321)</span>
-                          </a>
+                    {msg.text && (
+                      <div
+                        className={`max-w-[88%] p-3.5 rounded-2xl shadow-xs text-xs leading-relaxed ${
+                          msg.sender === 'user'
+                            ? 'bg-[#133fbd] text-white rounded-br-none'
+                            : 'bg-white text-slate-800 border border-slate-200/70 rounded-bl-none'
+                        }`}
+                      >
+                        {/* Markdown text parsing */}
+                        <div className="whitespace-pre-line">
+                          {msg.text.split('\n').map((line, idx) => {
+                            const parts = line.split(/(\*\*.*?\*\*|\`.*?\`)/g);
+                            return (
+                              <div key={idx} className={idx > 0 ? 'mt-1' : ''}>
+                                {parts.map((part, pIdx) => {
+                                  if (part.startsWith('**') && part.endsWith('**')) {
+                                    return <strong key={pIdx} className="font-extrabold text-slate-900">{part.slice(2, -2)}</strong>;
+                                  }
+                                  if (part.startsWith('`') && part.endsWith('`')) {
+                                    return <code key={pIdx} className="bg-blue-50 text-blue-800 border border-blue-200/60 font-mono px-1.5 py-0.5 rounded text-[11px] font-bold">{part.slice(1, -1)}</code>;
+                                  }
+                                  return part;
+                                })}
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
 
-                      {/* Navigation Action Button */}
-                      {msg.action && (
-                        <button
-                          onClick={() => {
-                            navigate(msg.action.path);
-                          }}
-                          className="mt-3.5 w-full py-2 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[11px] font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
-                        >
-                          <span>{msg.action.label}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+                        {/* Direct Contact Links */}
+                        {msg.contactLinks && (
+                          <div className="mt-3 space-y-2 border-t border-slate-100 pt-2.5">
+                            <a
+                              href="mailto:apartmentmanagementsystem123@gmail.com"
+                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold rounded-xl border border-blue-200/70 transition shadow-2xs"
+                            >
+                              <Mail className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span>Send Email Support</span>
+                            </a>
+                            <a
+                              href="https://wa.me/94110123321"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-xl border border-emerald-200/70 transition shadow-2xs"
+                            >
+                              <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Chat on WhatsApp (+94 11 0123 321)</span>
+                            </a>
+                          </div>
+                        )}
 
-                    <span className="text-[9px] font-semibold text-slate-400 mt-1 px-1">
-                      {msg.time}
-                    </span>
+                        {/* Navigation Action Button */}
+                        {msg.action && (
+                          <button
+                            onClick={() => {
+                              navigate(msg.action.path);
+                            }}
+                            className="mt-3.5 w-full py-2 px-3 bg-[#133fbd] hover:bg-[#0f3299] text-white text-[11px] font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                          >
+                            <span>{msg.action.label}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {msg.time && (
+                      <span className="text-[9px] font-semibold text-slate-400 mt-1 px-1">
+                        {msg.time}
+                      </span>
+                    )}
 
                     {/* Suggestion Option Pills */}
                     {msg.suggestions && msg.suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2 max-w-[92%]">
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[95%]">
                         {msg.suggestions.map((sug, sIdx) => (
                           <button
                             key={sIdx}
                             onClick={() => handleSendMessage(sug)}
-                            className="px-2.5 py-1 bg-white hover:bg-blue-50 border border-blue-200/80 hover:border-blue-400 text-blue-700 text-[10.5px] font-bold rounded-full transition shadow-2xs cursor-pointer text-left"
+                            className="px-3 py-1.5 bg-white hover:bg-blue-50 border border-blue-200/80 hover:border-blue-400 text-blue-700 text-[11px] font-bold rounded-full transition shadow-2xs cursor-pointer text-left flex items-center gap-1"
                           >
                             {sug}
                           </button>
