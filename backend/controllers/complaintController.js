@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { sendComplaintAssignedEmail, sendComplaintStatusEmail } = require('../utils/emailService');
 
 // @desc    Submit a complaint
 // @route   POST /api/complaints
@@ -224,12 +225,35 @@ const updateComplaintStatus = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or missing status.' });
     }
 
-    const [existing] = await pool.query('SELECT * FROM complaints WHERE id = ?', [id]);
+    const [existing] = await pool.query(`
+      SELECT c.*, u.email AS resident_email, u.full_name AS resident_name,
+             staff.full_name AS assigned_staff_name
+      FROM complaints c
+      JOIN users u ON c.user_id = u.id
+      LEFT JOIN users staff ON c.assigned_staff_id = staff.id
+      WHERE c.id = ?
+    `, [id]);
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Complaint not found.' });
     }
 
+    const complaint = existing[0];
     await pool.query('UPDATE complaints SET status = ? WHERE id = ?', [status, id]);
+
+    // Notify resident of status change (fire-and-forget)
+    if (complaint.resident_email) {
+      const ticketId = `Ticket-${1000 + complaint.id}`;
+      sendComplaintStatusEmail({
+        email: complaint.resident_email,
+        residentName: complaint.resident_name,
+        ticketId,
+        category: complaint.category,
+        newStatus: status,
+        description: complaint.description,
+        assignedStaffName: complaint.assigned_staff_name || null
+      }).catch(err => console.error('[Email] Complaint status email failed:', err.message));
+    }
+
     return res.status(200).json({ message: 'Complaint status updated successfully.' });
   } catch (error) {
     console.error('Update complaint status error:', error);
@@ -249,20 +273,67 @@ const assignComplaint = async (req, res) => {
       return res.status(400).json({ message: 'Staff ID is required.' });
     }
 
-    const [existing] = await pool.query('SELECT * FROM complaints WHERE id = ?', [id]);
+    const [existing] = await pool.query(`
+      SELECT c.*, u.full_name AS resident_name, u.unit_number AS resident_unit
+      FROM complaints c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.id = ?
+    `, [id]);
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Complaint not found.' });
     }
 
-    const [staff] = await pool.query('SELECT role FROM users WHERE id = ?', [assigned_staff_id]);
+    const [staff] = await pool.query('SELECT id, role, full_name, email FROM users WHERE id = ?', [assigned_staff_id]);
     if (staff.length === 0 || !['staff', 'maintenance'].includes(staff[0].role)) {
       return res.status(400).json({ message: 'Assigned user must be a valid staff or maintenance worker.' });
     }
 
+    const complaint = existing[0];
     await pool.query('UPDATE complaints SET assigned_staff_id = ? WHERE id = ?', [assigned_staff_id, id]);
+
+    // Notify the assigned staff member (fire-and-forget)
+    if (staff[0].email) {
+      const ticketId = `Ticket-${1000 + complaint.id}`;
+      sendComplaintAssignedEmail({
+        email: staff[0].email,
+        staffName: staff[0].full_name,
+        ticketId,
+        category: complaint.category,
+        priority: complaint.priority,
+        description: complaint.description,
+        residentName: complaint.resident_name,
+        residentUnit: complaint.resident_unit
+      }).catch(err => console.error('[Email] Complaint assignment email failed:', err.message));
+    }
+
     return res.status(200).json({ message: 'Complaint assigned successfully.' });
   } catch (error) {
     console.error('Assign complaint error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// @desc    Update complaint description (admin edit)
+// @route   PUT /api/complaints/:id/description
+// @access  Private (Admin / Staff)
+const updateComplaintDescription = async (req, res) => {
+  const { id } = req.params;
+  const { description } = req.body;
+
+  try {
+    if (!description || description.trim() === '') {
+      return res.status(400).json({ message: 'Description is required.' });
+    }
+
+    const [existing] = await pool.query('SELECT id FROM complaints WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ message: 'Complaint not found.' });
+    }
+
+    await pool.query('UPDATE complaints SET description = ? WHERE id = ?', [description.trim(), id]);
+    return res.status(200).json({ message: 'Description updated successfully.' });
+  } catch (error) {
+    console.error('Update complaint description error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
   }
 };
@@ -272,5 +343,6 @@ module.exports = {
   getMyComplaintStats,
   getComplaints,
   updateComplaintStatus,
-  assignComplaint
+  assignComplaint,
+  updateComplaintDescription
 };

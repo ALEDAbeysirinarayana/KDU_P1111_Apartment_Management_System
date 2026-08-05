@@ -677,16 +677,25 @@ export default function AdminDashboard() {
     }
   };
 
-  // Update status & staff assignment concurrently from modal view
+  // Update status, staff assignment & description concurrently from modal view
   const handleUpdateComplaintDetails = async (e) => {
     e.preventDefault();
     if (!selectedComplaint) return;
     try {
+      // Always update status
       await api.put(`/complaints/${selectedComplaint.id}/status`, { status: selectedComplaint.status });
+
+      // Update description if changed
+      if (selectedComplaint.description && selectedComplaint.description.trim() !== '') {
+        await api.put(`/complaints/${selectedComplaint.id}/description`, { description: selectedComplaint.description });
+      }
+
+      // Assign staff if selected
       if (selectedComplaint.assigned_staff_id) {
         await api.put(`/complaints/${selectedComplaint.id}/assign`, { assigned_staff_id: parseInt(selectedComplaint.assigned_staff_id) });
       }
-      setSuccessMsg("Complaint ticket details updated successfully.");
+
+      setSuccessMsg("Complaint ticket updated successfully. Notifications sent.");
       setSelectedComplaint(null);
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -5072,10 +5081,14 @@ export default function AdminDashboard() {
               </div>
 
               <div>
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Complaint Description</span>
-                <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-600 font-medium italic min-h-[80px] max-h-[140px] overflow-y-auto">
-                  "{selectedComplaint.description}"
-                </div>
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Complaint Description <span className="text-blue-500 normal-case font-medium">(editable)</span></span>
+                <textarea
+                  rows={4}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 rounded-xl text-xs font-medium resize-none transition-all duration-200"
+                  value={selectedComplaint.description || ''}
+                  onChange={(e) => setSelectedComplaint({ ...selectedComplaint, description: e.target.value })}
+                  placeholder="Edit complaint description..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

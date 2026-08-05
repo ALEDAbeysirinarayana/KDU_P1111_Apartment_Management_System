@@ -239,10 +239,126 @@ const sendInvoiceEmail = async (invoiceData) => {
   console.log(`[Email] Invoice notification sent to ${email} for invoice ${invoiceId}`);
 };
 
+// ─── 5. Complaint Assigned — Staff Notification ─────────────────────────────────
+/**
+ * Sent to the assigned staff/maintenance worker when a complaint is assigned to them.
+ * @param {{ email: string, staffName: string, ticketId: string, category: string, priority: string, description: string, residentName: string, residentUnit: string }} data
+ */
+const sendComplaintAssignedEmail = async (data) => {
+  const { email, staffName, ticketId, category, priority, description, residentName, residentUnit } = data;
+
+  const priorityColor = priority === 'emergency' ? '#dc2626' : priority === 'high' ? '#d97706' : '#2563eb';
+  const priorityBadge = `<span style="display:inline-block;padding:4px 14px;border-radius:50px;font-size:12px;font-weight:700;background:${priority === 'emergency' ? '#fee2e2' : priority === 'high' ? '#fef3c7' : '#dbeafe'};color:${priorityColor};margin-bottom:16px;">${priority.toUpperCase()} PRIORITY</span>`;
+
+  const body = `
+    <h2>🔧 New Complaint Ticket Assigned to You</h2>
+    ${priorityBadge}
+    <p>Dear <strong>${staffName || 'Staff Member'}</strong>,</p>
+    <p>A maintenance/complaint ticket has been assigned to you. Please review the details below and take appropriate action.</p>
+
+    <div style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:20px 0;">
+      <table style="width:100%;font-size:14px;color:#374151;border-collapse:collapse;">
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">Ticket ID:</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#111827;">${ticketId}</td>
+        </tr>
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">Category:</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#111827;">${category}</td>
+        </tr>
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">Reported by:</td>
+          <td style="padding:8px 0;text-align:right;">${residentName || 'Resident'} (${residentUnit || 'Unit N/A'})</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;vertical-align:top;">Description:</td>
+          <td style="padding:8px 0;text-align:right;font-style:italic;color:#374151;">"${description}"</td>
+        </tr>
+      </table>
+    </div>
+
+    <p>Please log in to the Apartment Management System to view full details and update the ticket status as you progress.</p>
+    <hr class="divider" />
+    <p style="font-size:13px;color:#6b7280;">If you believe this was assigned to you in error, please contact the administration team.</p>
+  `;
+
+  await transporter.sendMail({
+    from: `"AMS – Apartment Management" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `🔧 [Ticket ${ticketId}] New Complaint Assigned — ${category} (${priority.toUpperCase()})`,
+    html: buildHtml(`Ticket Assigned: ${ticketId}`, priorityColor, body),
+  });
+
+  console.log(`[Email] Complaint assignment notification sent to staff ${email} for ticket ${ticketId}`);
+};
+
+// ─── 6. Complaint Status Updated — Resident Notification ────────────────────────
+/**
+ * Sent to the resident when their complaint ticket status changes.
+ * @param {{ email: string, residentName: string, ticketId: string, category: string, newStatus: string, description: string, assignedStaffName: string }} data
+ */
+const sendComplaintStatusEmail = async (data) => {
+  const { email, residentName, ticketId, category, newStatus, description, assignedStaffName } = data;
+
+  const statusLabels = {
+    pending: { label: 'Pending Review', color: '#d97706', bg: '#fef3c7', icon: '⏳' },
+    in_progress: { label: 'In Progress', color: '#2563eb', bg: '#dbeafe', icon: '🔧' },
+    resolved: { label: 'Resolved', color: '#059669', bg: '#d1fae5', icon: '✅' },
+    emergency: { label: 'Emergency', color: '#dc2626', bg: '#fee2e2', icon: '🚨' },
+  };
+
+  const st = statusLabels[newStatus] || { label: newStatus, color: '#6b7280', bg: '#f3f4f6', icon: '📋' };
+  const badge = `<span style="display:inline-block;padding:6px 18px;border-radius:50px;font-size:13px;font-weight:700;background:${st.bg};color:${st.color};margin-bottom:16px;">${st.icon} ${st.label}</span>`;
+
+  const body = `
+    <h2>Your Complaint Ticket Has Been Updated</h2>
+    ${badge}
+    <p>Dear <strong>${residentName || 'Resident'}</strong>,</p>
+    <p>Your complaint/maintenance request (Ticket <strong>${ticketId}</strong>) has been updated to the status: <strong style="color:${st.color};">${st.label}</strong>.</p>
+
+    <div style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:20px 0;">
+      <table style="width:100%;font-size:14px;color:#374151;border-collapse:collapse;">
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">Ticket ID:</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;">${ticketId}</td>
+        </tr>
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">Category:</td>
+          <td style="padding:8px 0;text-align:right;">${category}</td>
+        </tr>
+        <tr style="border-bottom:1px dashed #e5e7eb;">
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;">New Status:</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:${st.color};">${st.icon} ${st.label}</td>
+        </tr>
+        ${assignedStaffName ? `<tr style="border-bottom:1px dashed #e5e7eb;"><td style="padding:8px 0;color:#6b7280;font-weight:600;">Assigned To:</td><td style="padding:8px 0;text-align:right;">${assignedStaffName}</td></tr>` : ''}
+        <tr>
+          <td style="padding:8px 0;color:#6b7280;font-weight:600;vertical-align:top;">Your Request:</td>
+          <td style="padding:8px 0;text-align:right;font-style:italic;color:#374151;">"${description}"</td>
+        </tr>
+      </table>
+    </div>
+
+    ${newStatus === 'resolved' ? '<p>✅ Your issue has been <strong>resolved</strong>. If the problem persists, please submit a new complaint through your Resident Dashboard.</p>' : '<p>Our team is working on your request. You will receive further updates as the ticket progresses.</p>'}
+    <hr class="divider" />
+    <p style="font-size:13px;color:#6b7280;">Log in to your Resident Dashboard to view full complaint history.</p>
+  `;
+
+  await transporter.sendMail({
+    from: `"AMS – Apartment Management" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `${st.icon} [Ticket ${ticketId}] Your Complaint Status — ${st.label}`,
+    html: buildHtml(`Ticket Update: ${ticketId}`, st.color, body),
+  });
+
+  console.log(`[Email] Complaint status notification sent to resident ${email} for ticket ${ticketId} — ${newStatus}`);
+};
+
 module.exports = {
   sendRegistrationEmail,
   sendAdminApprovalEmail,
   sendOwnerApprovalEmail,
   sendInvoiceEmail,
+  sendComplaintAssignedEmail,
+  sendComplaintStatusEmail,
 };
 

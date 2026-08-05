@@ -5,7 +5,8 @@ const {
   getMyComplaintStats,
   getComplaints,
   updateComplaintStatus,
-  assignComplaint
+  assignComplaint,
+  updateComplaintDescription
 } = require('../controllers/complaintController');
 const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -16,5 +17,6 @@ router.post('/', verifyToken, authorizeRoles('homeowner', 'tenant'), submitCompl
 router.get('/', verifyToken, getComplaints);
 router.put('/:id/status', verifyToken, authorizeRoles('admin', 'staff', 'maintenance'), updateComplaintStatus);
 router.put('/:id/assign', verifyToken, authorizeRoles('admin', 'staff'), assignComplaint);
+router.put('/:id/description', verifyToken, authorizeRoles('admin', 'staff'), updateComplaintDescription);
 
 module.exports = router;
