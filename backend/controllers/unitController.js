@@ -31,9 +31,9 @@ const getUnits = async (req, res) => {
     }
 
     if (search && search.trim() !== '') {
-      conditions.push('(u.unit_number LIKE ? OR owner.full_name LIKE ? OR tenant.full_name LIKE ?)');
+      conditions.push('(u.unit_number LIKE ? OR u.block_name LIKE ? OR owner.full_name LIKE ? OR owner.email LIKE ? OR tenant.full_name LIKE ? OR tenant.email LIKE ? OR u_user.full_name LIKE ? OR u_user.email LIKE ?)');
       const searchPattern = `%${search.trim()}%`;
-      params.push(searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -43,12 +43,22 @@ const getUnits = async (req, res) => {
         u.id, u.block_name, u.floor_number, u.unit_number, u.type, u.status,
         u.owner_id, owner.email AS owner_email, owner.full_name AS owner_name,
         u.tenant_id, tenant.email AS tenant_email, tenant.full_name AS tenant_name,
-        u.parking_slot_id, p.slot_number AS parking_slot_number
+        u.parking_slot_id, p.slot_number AS parking_slot_number,
+        COALESCE(tenant.full_name, owner.full_name, MAX(u_user.full_name), tenant.email, owner.email, MAX(u_user.email), 'Resident') AS resident_name,
+        COALESCE(tenant.email, owner.email, MAX(u_user.email), NULL) AS resident_email,
+        CASE 
+          WHEN tenant.id IS NOT NULL THEN 'Tenant'
+          WHEN owner.id IS NOT NULL THEN 'Homeowner'
+          WHEN MAX(u_user.id) IS NOT NULL THEN CONCAT(UCASE(LEFT(MAX(u_user.role), 1)), LCASE(SUBSTRING(MAX(u_user.role), 2)))
+          ELSE 'Vacant'
+        END AS resident_role
       FROM units u
       LEFT JOIN users owner ON u.owner_id = owner.id
       LEFT JOIN users tenant ON u.tenant_id = tenant.id
+      LEFT JOIN users u_user ON (u_user.unit_number = u.unit_number AND u_user.status = 'approved')
       LEFT JOIN parking_management p ON u.parking_slot_id = p.id
       ${whereClause}
+      GROUP BY u.id, u.block_name, u.floor_number, u.unit_number, u.type, u.status, u.owner_id, owner.email, owner.full_name, u.tenant_id, tenant.email, tenant.full_name, u.parking_slot_id, p.slot_number
       ORDER BY u.block_name, u.floor_number, u.unit_number
     `, params);
 

@@ -96,6 +96,8 @@ export default function AdminDashboard() {
   const [billSearchQuery, setBillSearchQuery] = useState('');
   const [billStatusFilter, setBillStatusFilter] = useState('All');
   const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState(false);
+  const [unitSearchTerm, setUnitSearchTerm] = useState('');
+  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
   const [recordPaymentForm, setRecordPaymentForm] = useState({ billId: '', payment_method: 'Bank Transfer', notes: '' });
   const [notices, setNotices] = useState([]);
@@ -279,6 +281,14 @@ export default function AdminDashboard() {
     billSearchQuery, billStatusFilter, billsPage
   ]);
 
+  useEffect(() => {
+    if (showGenerateInvoiceModal && units.length === 0) {
+      api.get('/units')
+        .then((res) => setUnits(res.data.units || res.data || []))
+        .catch((err) => console.error('Failed to fetch units for invoice modal:', err));
+    }
+  }, [showGenerateInvoiceModal]);
+
   // Handle Approvals
   const handleApproval = async (userId, action) => {
     try {
@@ -424,8 +434,10 @@ export default function AdminDashboard() {
         ? newBill
         : newBill;
       await api.post('/bills', form);
-      setSuccessMsg('Invoice generated successfully!');
+      setSuccessMsg('Invoice generated successfully! Email notification sent.');
       setNewBill({ unit_id: '', amount: '', description: '', due_date: '', payment_method: 'Bank Transfer' });
+      setUnitSearchTerm('');
+      setUnitDropdownOpen(false);
       setShowGenerateInvoiceModal(false);
       fetchData();
       setTimeout(() => setSuccessMsg(''), 4000);
@@ -5668,93 +5680,227 @@ export default function AdminDashboard() {
       )}
 
       {/* Generate Invoice Modal */}
-      {showGenerateInvoiceModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Generate Invoice</h3>
-              <button onClick={() => setShowGenerateInvoiceModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
+      {showGenerateInvoiceModal && (() => {
+        const selectedUnit = units.find((u) => String(u.id) === String(newBill.unit_id));
+        const resName = selectedUnit ? (selectedUnit.resident_name || selectedUnit.owner_name || selectedUnit.tenant_name) : null;
+        const resEmail = selectedUnit ? (selectedUnit.resident_email || selectedUnit.owner_email || selectedUnit.tenant_email) : null;
+        const resRole = selectedUnit ? (selectedUnit.resident_role || (selectedUnit.tenant_name ? 'Tenant' : selectedUnit.owner_name ? 'Homeowner' : 'Resident')) : null;
 
-            <form onSubmit={handleCreateBill} className="space-y-4 font-sans text-xs">
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Unit</label>
-                <div className="relative">
-                  <select
-                    required
-                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                    value={newBill.unit_id}
-                    onChange={(e) => setNewBill({ ...newBill, unit_id: e.target.value })}
-                  >
-                    <option value="">-- Select Unit --</option>
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.block_name} – Floor {u.floor_number} – Unit {u.unit_number}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
+        const filteredUnits = units.filter((u) => {
+          if (!unitSearchTerm.trim()) return true;
+          const term = unitSearchTerm.toLowerCase().trim();
+          const unitNum = String(u.unit_number || '').toLowerCase();
+          const blockName = String(u.block_name || '').toLowerCase();
+          const name = String(u.resident_name || u.owner_name || u.tenant_name || '').toLowerCase();
+          const email = String(u.resident_email || u.owner_email || u.tenant_email || '').toLowerCase();
+          return unitNum.includes(term) || blockName.includes(term) || name.includes(term) || email.includes(term);
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Generate Invoice</h3>
+                <button 
+                  onClick={() => {
+                    setShowGenerateInvoiceModal(false);
+                    setUnitDropdownOpen(false);
+                    setUnitSearchTerm('');
+                  }} 
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleCreateBill} className="space-y-4 font-sans text-xs">
+                {/* Searchable Select Unit Dropdown */}
                 <div>
-                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Amount ($)</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Select Unit (Searchable)</label>
+                  <div className="relative">
+                    <div
+                      onClick={() => setUnitDropdownOpen(!unitDropdownOpen)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus-within:border-blue-600 focus-within:bg-white focus-within:ring-1 focus-within:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium cursor-pointer flex justify-between items-center transition"
+                    >
+                      <span className={selectedUnit ? 'text-slate-800 font-semibold' : 'text-slate-400'}>
+                        {selectedUnit
+                          ? `${selectedUnit.block_name} – Floor ${selectedUnit.floor_number} – Unit ${selectedUnit.unit_number}`
+                          : '-- Select Unit --'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${unitDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {unitDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-60 overflow-hidden flex flex-col animate-in fade-in duration-150">
+                        {/* Search Input */}
+                        <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                          <Search className="w-3.5 h-3.5 text-slate-400 ml-1 shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Search by Unit, Name, or Email..."
+                            value={unitSearchTerm}
+                            onChange={(e) => setUnitSearchTerm(e.target.value)}
+                            className="w-full bg-transparent text-xs text-slate-800 outline-none placeholder-slate-400"
+                            autoFocus
+                          />
+                          {unitSearchTerm && (
+                            <button
+                              type="button"
+                              onClick={() => setUnitSearchTerm('')}
+                              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Options List */}
+                        <div className="overflow-y-auto max-h-48 divide-y divide-slate-100">
+                          {filteredUnits.length > 0 ? (
+                            filteredUnits.map((u) => {
+                              const uResName = u.resident_name || u.owner_name || u.tenant_name;
+                              const uResEmail = u.resident_email || u.owner_email || u.tenant_email;
+                              const isSelected = String(newBill.unit_id) === String(u.id);
+
+                              return (
+                                <div
+                                  key={u.id}
+                                  onClick={() => {
+                                    setNewBill({ ...newBill, unit_id: u.id });
+                                    setUnitDropdownOpen(false);
+                                  }}
+                                  className={`p-2.5 cursor-pointer hover:bg-blue-50/80 transition flex flex-col gap-0.5 ${
+                                    isSelected ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-800 text-xs">
+                                      {u.block_name} • Floor {u.floor_number} • Unit {u.unit_number}
+                                    </span>
+                                    {u.status && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
+                                        u.status === 'occupied' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                      }`}>
+                                        {u.status}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {uResName ? (
+                                    <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                                      <span>👤 {uResName} ({uResEmail || 'No Email'})</span>
+                                      <span className="text-slate-400 text-[10px] font-medium">{u.resident_role || 'Resident'}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-slate-400 italic">No resident assigned</div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="p-4 text-center text-slate-400 text-xs">No units match your search</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Display Selected Resident Info Box */}
+                {selectedUnit && (
+                  <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 space-y-2">
+                    <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Occupying Resident Details</div>
+                    {resName ? (
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-600">Resident Name:</span>
+                          <span className="font-bold text-slate-900">{resName}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-600">Email Address:</span>
+                          <span className="font-medium text-blue-600">{resEmail || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-600">Occupancy Role:</span>
+                          <span className="font-bold bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-md">
+                            {resRole}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-amber-600 font-medium flex items-center gap-1.5">
+                        <span>⚠️ No active resident linked to this unit. Automated email notification will not be sent.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Amount ($)</label>
+                    <input
+                      type="number" step="0.01" required placeholder="0.00"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
+                      value={newBill.amount}
+                      onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">Due Date</label>
+                    <input
+                      type="date" required
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
+                      value={newBill.due_date}
+                      onChange={(e) => setNewBill({ ...newBill, due_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
                   <input
-                    type="number" step="0.01" required placeholder="0.00"
+                    type="text" required placeholder="e.g. Monthly Maintenance Fee"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
-                    value={newBill.amount}
-                    onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                    value={newBill.description}
+                    onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
                   />
                 </div>
+
                 <div>
-                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Due Date</label>
-                  <input
-                    type="date" required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium"
-                    value={newBill.due_date}
-                    onChange={(e) => setNewBill({ ...newBill, due_date: e.target.value })}
-                  />
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">Payment Method</label>
+                  <div className="relative">
+                    <select
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
+                      value={newBill.payment_method}
+                      onChange={(e) => setNewBill({ ...newBill, payment_method: e.target.value })}
+                    >
+                      <option>Bank Transfer</option>
+                      <option>Online Payment</option>
+                      <option>Card</option>
+                      <option>Cash</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1.5">Description</label>
-                <input
-                  type="text" required placeholder="e.g. Monthly Maintenance Fee"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 placeholder-slate-400/90 rounded-lg text-xs font-medium"
-                  value={newBill.description}
-                  onChange={(e) => setNewBill({ ...newBill, description: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1.5">Payment Method</label>
-                <div className="relative">
-                  <select
-                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200/80 focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 outline-none text-slate-800 rounded-lg text-xs font-medium appearance-none cursor-pointer"
-                    value={newBill.payment_method}
-                    onChange={(e) => setNewBill({ ...newBill, payment_method: e.target.value })}
+                <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowGenerateInvoiceModal(false);
+                      setUnitDropdownOpen(false);
+                      setUnitSearchTerm('');
+                    }} 
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition"
                   >
-                    <option>Bank Transfer</option>
-                    <option>Online Payment</option>
-                    <option>Card</option>
-                    <option>Cash</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm">Generate Invoice</button>
                 </div>
-              </div>
-
-              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
-                <button type="button" onClick={() => setShowGenerateInvoiceModal(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg cursor-pointer transition">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-[#133fbd] hover:bg-[#0f3299] text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-sm">Generate Invoice</button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Record Payment Modal */}
       {showRecordPaymentModal && (

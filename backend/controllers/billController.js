@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { sendInvoiceEmail } = require('../utils/emailService');
 
 // @desc    Get all bills (admin) with metrics, monthly collection, overdue list, transactions
 // @route   GET /api/bills
@@ -207,6 +208,34 @@ const createBill = async (req, res) => {
     // Generate invoice_id
     const invId = `INV-${String(result.insertId).padStart(4, '0')}`;
     await pool.query('UPDATE bills SET invoice_id = ? WHERE id = ?', [invId, result.insertId]);
+
+    // Fetch unit & resident details to send email notification
+    const [unitDetails] = await pool.query(`
+      SELECT u.block_name, u.floor_number, u.unit_number,
+             COALESCE(tenant.full_name, owner.full_name, MAX(u_user.full_name), tenant.email, owner.email, MAX(u_user.email)) AS resident_name,
+             COALESCE(tenant.email, owner.email, MAX(u_user.email)) AS resident_email
+      FROM units u
+      LEFT JOIN users owner ON u.owner_id = owner.id
+      LEFT JOIN users tenant ON u.tenant_id = tenant.id
+      LEFT JOIN users u_user ON (u_user.unit_number = u.unit_number AND u_user.status = 'approved')
+      WHERE u.id = ?
+      GROUP BY u.id, u.block_name, u.floor_number, u.unit_number, tenant.full_name, owner.full_name, tenant.email, owner.email
+      LIMIT 1
+    `, [unit_id]);
+
+    if (unitDetails.length > 0 && unitDetails[0].resident_email) {
+      const uInfo = `${unitDetails[0].block_name} – Floor ${unitDetails[0].floor_number} – Unit ${unitDetails[0].unit_number}`;
+      sendInvoiceEmail({
+        email: unitDetails[0].resident_email,
+        residentName: unitDetails[0].resident_name,
+        invoiceId: invId,
+        amount,
+        description,
+        dueDate: due_date,
+        unitInfo: uInfo,
+        paymentMethod: payment_method
+      }).catch((err) => console.error('[Email] Invoice notification failed:', err.message));
+    }
 
     return res.status(201).json({
       message: 'Invoice created successfully.',

@@ -41,13 +41,13 @@ const buildHtml = (title, accentColor, bodyHtml) => `
   <div class="wrapper">
     <div class="header">
       <h1>🏢 Apartment Management System</h1>
-      <p>KDU P1111 — Automated Notification</p>
+      <p>Automated Notification</p>
     </div>
     <div class="body">
       ${bodyHtml}
     </div>
     <div class="footer">
-      <p>This is an automated message from <strong>AMS — KDU P1111</strong>.<br/>Please do not reply to this email.</p>
+      <p>This is an automated message from <strong>AMS — KDU</strong>.<br/>Please do not reply to this email.</p>
     </div>
   </div>
 </body>
@@ -183,8 +183,66 @@ const sendOwnerApprovalEmail = async (tenantUser, action) => {
   console.log(`[Email] Homeowner ${action} notification sent to ${email}`);
 };
 
+// ─── 4. Invoice Notification ───────────────────────────────────────────────────
+/**
+ * Sent when an Admin generates a new invoice for a user/unit.
+ * @param {{ email: string, residentName: string, invoiceId: string, amount: number|string, description: string, dueDate: string, unitInfo: string, paymentMethod: string }} invoiceData
+ */
+const sendInvoiceEmail = async (invoiceData) => {
+  const { email, residentName, invoiceId, amount, description, dueDate, unitInfo, paymentMethod } = invoiceData;
+
+  const formattedAmount = parseFloat(amount || 0).toFixed(2);
+
+  const body = `
+    <h2>New Invoice Issued</h2>
+    <span class="badge blue">Invoice #${invoiceId}</span>
+    <p>Dear <strong>${residentName || 'Resident'}</strong>,</p>
+    <p>A new invoice has been generated for your unit (<strong>${unitInfo || 'Apartment Unit'}</strong>).</p>
+
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
+      <table style="width: 100%; font-size: 14px; color: #374151; border-collapse: collapse;">
+        <tr style="border-bottom: 1px dashed #e5e7eb;">
+          <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Invoice Reference:</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #111827;">${invoiceId}</td>
+        </tr>
+        <tr style="border-bottom: 1px dashed #e5e7eb;">
+          <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Amount Due:</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #2563eb; font-size: 18px;">$${formattedAmount}</td>
+        </tr>
+        <tr style="border-bottom: 1px dashed #e5e7eb;">
+          <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Description:</td>
+          <td style="padding: 8px 0; text-align: right;">${description}</td>
+        </tr>
+        <tr style="border-bottom: 1px dashed #e5e7eb;">
+          <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Due Date:</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #dc2626;">${dueDate}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #6b7280; font-weight: 600;">Payment Method:</td>
+          <td style="padding: 8px 0; text-align: right;">${paymentMethod || 'Bank Transfer'}</td>
+        </tr>
+      </table>
+    </div>
+
+    <p>Please ensure payment is completed on or before the due date.</p>
+    <hr class="divider" />
+    <p style="font-size:13px; color:#6b7280;">Log in to your Resident Dashboard to view invoice history and pay online.</p>
+  `;
+
+  await transporter.sendMail({
+    from: `"AMS – Apartment Management" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `📄 New Invoice #${invoiceId} ($${formattedAmount}) - Action Required`,
+    html: buildHtml(`Invoice #${invoiceId}`, '#2563eb', body),
+  });
+
+  console.log(`[Email] Invoice notification sent to ${email} for invoice ${invoiceId}`);
+};
+
 module.exports = {
   sendRegistrationEmail,
   sendAdminApprovalEmail,
   sendOwnerApprovalEmail,
+  sendInvoiceEmail,
 };
+
