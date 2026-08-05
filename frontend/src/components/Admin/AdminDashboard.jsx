@@ -4014,7 +4014,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Payments Collected</span>
-                      <h3 className="text-2xl font-black text-slate-800 mt-1">${(billMetrics.paymentsCollected || 0).toLocaleString()}</h3>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">LKR {(billMetrics.paymentsCollected || 0).toLocaleString()}</h3>
                       <p className="text-[9px] text-slate-400 font-bold mt-1">Current month</p>
                     </div>
                     <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
@@ -4027,7 +4027,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Payments</span>
-                      <h3 className="text-2xl font-black text-slate-800 mt-1">${(billMetrics.pendingAmount || 0).toLocaleString()}</h3>
+                      <h3 className="text-2xl font-black text-slate-800 mt-1">LKR {(billMetrics.pendingAmount || 0).toLocaleString()}</h3>
                       <p className="text-[9px] text-amber-600 font-bold mt-1">{billMetrics.pendingCount} invoices pending</p>
                     </div>
                     <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center">
@@ -4040,7 +4040,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Overdue Payments</span>
-                      <h3 className="text-2xl font-black text-red-600 mt-1">${(billMetrics.overdueAmount || 0).toLocaleString()}</h3>
+                      <h3 className="text-2xl font-black text-red-600 mt-1">LKR {(billMetrics.overdueAmount || 0).toLocaleString()}</h3>
                       <p className="text-[9px] text-red-500 font-bold mt-1">{billMetrics.overdueCount} invoices critical</p>
                     </div>
                     <div className="w-9 h-9 bg-red-50 rounded-xl flex items-center justify-center">
@@ -4246,11 +4246,11 @@ export default function AdminDashboard() {
                         const isLast = i === billMonthlyData.length - 1;
                         return (
                           <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                            <span className="text-[8px] text-slate-400 font-bold">${Math.round(item.collected/1000)}k</span>
+                            <span className="text-[8px] text-slate-400 font-bold">LKR {Math.round(item.collected/1000)}k</span>
                             <div
                               className={`w-full rounded-t-md transition-all ${isLast ? 'bg-blue-600' : 'bg-slate-200'}`}
                               style={{ height: `${Math.max(heightPct, 4)}%` }}
-                              title={`${item.month}: $${parseFloat(item.collected).toLocaleString()}`}
+                              title={`${item.month}: LKR ${parseFloat(item.collected).toLocaleString()}`}
                             />
                             <span className={`text-[8px] font-extrabold uppercase ${isLast ? 'text-blue-600' : 'text-slate-400'}`}>{item.month}</span>
                           </div>
@@ -4290,7 +4290,7 @@ export default function AdminDashboard() {
                               </p>
                               <p className="text-[8px] text-red-500 font-bold">{o.days_overdue} days overdue</p>
                             </div>
-                            <span className="text-[10px] font-extrabold text-slate-800">${parseFloat(o.amount).toFixed(2)}</span>
+                            <span className="text-[10px] font-extrabold text-slate-800">LKR {parseFloat(o.amount).toFixed(2)}</span>
                           </div>
                         );
                       })}
@@ -4348,7 +4348,7 @@ export default function AdminDashboard() {
                             </td>
                             <td className="px-5 py-3.5 font-medium text-slate-700 text-[10px]">{tx.resident_name}</td>
                             <td className="px-5 py-3.5 font-medium text-slate-600 text-[10px]">{tx.block_name}-{tx.unit_number}</td>
-                            <td className="px-5 py-3.5 font-extrabold text-slate-800 text-[10px]">${parseFloat(tx.amount).toFixed(2)}</td>
+                            <td className="px-5 py-3.5 font-extrabold text-slate-800 text-[10px]">LKR {parseFloat(tx.amount).toFixed(2)}</td>
                             <td className="px-5 py-3.5 text-[10px]">
                               <div className="flex items-center gap-1 text-slate-500 font-semibold">
                                 <CreditCard className="w-3 h-3" /> {tx.method}

@@ -560,7 +560,7 @@ export default function ResidentDashboard() {
                   {/* Payments */}
                   <div className="bg-white border border-slate-200/50 p-4 rounded-xl shadow-sm border-l-4 border-l-red-500">
                     <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Pending Payments</span>
-                    <h3 className="text-2xl font-black text-red-600 mt-1">${metrics.pendingPayments}</h3>
+                    <h3 className="text-2xl font-black text-red-600 mt-1">LKR {metrics.pendingPayments}</h3>
                     <p className="text-[9px] text-red-500 font-bold mt-1">
                       {metrics.nextPaymentDue ? `Due by ${new Date(metrics.nextPaymentDue).toLocaleDateString()}` : 'No bills outstanding'}
                     </p>
@@ -672,7 +672,7 @@ export default function ResidentDashboard() {
                     </div>
                     <div className="text-right">
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Total Outstanding</span>
-                      <h4 className="text-base font-black text-red-600 mt-0.5">${Number(metrics.pendingPayments || 0).toFixed(2)}</h4>
+                      <h4 className="text-base font-black text-red-600 mt-0.5">LKR {Number(metrics.pendingPayments || 0).toFixed(2)}</h4>
                     </div>
                   </div>
                   
@@ -698,7 +698,7 @@ export default function ResidentDashboard() {
                               <td className="py-3 font-medium">
                                 {new Date(b.due_date).toLocaleString('default', { month: 'long', year: 'numeric' })}
                               </td>
-                              <td className="py-3 font-black text-slate-800">${b.amount}</td>
+                              <td className="py-3 font-black text-slate-800">LKR {b.amount}</td>
                               <td className={`py-3 font-bold ${b.status === 'unpaid' ? 'text-red-500' : 'text-slate-400'}`}>
                                 {new Date(b.due_date).toLocaleDateString()}
                               </td>
