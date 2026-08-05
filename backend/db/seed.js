@@ -543,6 +543,97 @@ async function runSeed() {
       console.log(`  Skipped complaints seeding (${compCount[0].count} records already exist).`);
     }
 
+    // 11. Seed Additional Facilities (5 more → total 8)
+    console.log('Seeding additional facilities...');
+    const [facCount2] = await pool.query('SELECT COUNT(*) AS count FROM facilities');
+    if (facCount2[0].count <= 3) {
+      await pool.query(`
+        INSERT INTO facilities (facility_id, name, description, capacity, status) VALUES
+        ('FAC-004', 'Resident Gym',          'Fully equipped fitness center with cardio & free weights',  30, 'available'),
+        ('FAC-005', 'Multipurpose Hall',     'Spacious hall for events, parties, and gatherings',         80, 'available'),
+        ('FAC-006', 'Kids Play Area',        'Safe indoor play zone with toys and foam flooring',         20, 'available'),
+        ('FAC-007', 'Sauna & Steam Room',    'Relaxing sauna and steam room for residents',               8,  'maintenance'),
+        ('FAC-008', 'Tennis Court',          'Hard-surface tennis court with floodlighting for night play', 4, 'available')
+      `);
+      console.log('  5 additional facilities seeded (total 8).');
+    } else {
+      console.log(`  Skipped extra facilities (already ${facCount2[0].count} records).`);
+    }
+
+    // 12. Seed Facility Reservation Requests (10 records)
+    console.log('Seeding facility reservation requests...');
+    const [frCount] = await pool.query('SELECT COUNT(*) AS count FROM facility_reservations');
+    if (frCount[0].count === 0) {
+      const fr = [
+        // [user_email, facility_name, date, purpose, participants, notes, time_slot, status]
+        ['homeowner@apartment.com',        'Main Swimming Pool',  '2026-08-10', 'Family swimming session',       4,  'Please keep lane 2 free.',          '08:00 AM – 10:00 AM', 'approved'],
+        ['tenant.wilson@apartment.com',    'Resident Gym',        '2026-08-11', 'Personal workout',              1,  null,                                 '06:00 AM – 07:30 AM', 'approved'],
+        ['owner.smith@apartment.com',      'Multipurpose Hall',   '2026-08-15', 'Birthday party for 50 guests', 50,  'Need tables and chairs arranged.',   '05:00 PM – 09:00 PM', 'pending'],
+        ['owner.johnson@apartment.com',    'Business Center',     '2026-08-16', 'Client presentation meeting',    8,  'Projector needed.',                  '10:00 AM – 12:00 PM', 'pending'],
+        ['tenant.anderson@apartment.com',  'Kids Play Area',      '2026-08-12', 'Playdate for kids',             10,  'Kids age 3–8.',                      '02:00 PM – 04:00 PM', 'approved'],
+        ['owner.brown@apartment.com',      'Tennis Court',        '2026-08-14', 'Friendly match',                 4,  null,                                 '07:00 AM – 09:00 AM', 'approved'],
+        ['owner.garcia@apartment.com',     'Multipurpose Hall',   '2026-08-20', 'Monthly homeowners meeting',    30,  'Microphone and PA system required.', '06:00 PM – 08:00 PM', 'pending'],
+        ['tenant.taylor@apartment.com',    'Sauna & Steam Room',  '2026-08-13', 'Relaxation session',             2,  null,                                 '04:00 PM – 05:30 PM', 'rejected'],
+        ['owner.jones@apartment.com',      'Main Swimming Pool',  '2026-08-18', 'Swimming lessons for children',  6,  'Children aged 5–12.',                '09:00 AM – 11:00 AM', 'pending'],
+        ['owner.miller@apartment.com',     'Resident Gym',        '2026-08-09', 'Group workout session',          5,  'Yoga mats needed.',                  '05:30 AM – 07:00 AM', 'rejected'],
+      ];
+
+      for (const [email, facility, date, purpose, participants, notes, timeSlot, status] of fr) {
+        const uid = insertedUsersByEmail[email];
+        if (uid) {
+          await pool.query(
+            `INSERT INTO facility_reservations (user_id, facility_name, date, purpose, participants, notes, time_slot, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [uid, facility, date, purpose, participants, notes, timeSlot, status]
+          );
+        }
+      }
+      console.log('  10 facility reservation requests seeded.');
+    } else {
+      console.log(`  Skipped facility reservations (${frCount[0].count} already exist).`);
+    }
+
+    // 13. Seed Visitor / Guest Parking Booking Requests (10 records)
+    console.log('Seeding visitor parking booking requests...');
+    // Fetch unit IDs for resident emails we'll use
+    const [unitRows] = await pool.query(`
+      SELECT u.id AS unit_id, u.unit_number, u.owner_id, u.tenant_id
+      FROM units u
+    `);
+    const unitByNumber = {};
+    for (const row of unitRows) unitByNumber[row.unit_number] = row.unit_id;
+
+    const guestParkingCount = await pool.query('SELECT COUNT(*) AS count FROM parking_management WHERE type = "guest" AND visitor_name IS NOT NULL');
+    if (guestParkingCount[0][0].count === 0) {
+      const guestBookings = [
+        // [unit_number, slot_number, guest_date, visitor_name, visitor_vehicle, arrival_time, reason, status]
+        ['A01', 'G-001', '2026-08-10', 'James Walker',      'WP-JKL-1234', '09:00 AM', 'Parent visiting for the weekend',       'approved'],
+        ['A02', 'G-002', '2026-08-11', 'Sarah Connor',      'CP-MNO-5678', '10:30 AM', 'Friend visiting for a day trip',         'approved'],
+        ['A03', 'G-003', '2026-08-12', 'Tom Bradley',       'NW-PQR-9012', '08:00 AM', 'Service technician – appliance repair',  'pending'],
+        ['B01', 'G-004', '2026-08-13', 'Linda Foster',      'WP-STU-3456', '11:00 AM', 'Relative staying for 2 nights',          'pending'],
+        ['B02', 'G-005', '2026-08-14', 'George Perez',      'CP-VWX-7890', '02:00 PM', 'Friend attending a birthday party',      'approved'],
+        ['B03', 'G-006', '2026-08-15', 'Nancy Kim',         'WP-YZA-1122', '12:00 PM', 'Doctor home visit',                      'pending'],
+        ['B04', 'G-001', '2026-08-17', 'David Chen',        'NW-BCD-3344', '04:00 PM', 'Moving furniture assistance',            'approved'],
+        ['C01', 'G-002', '2026-08-18', 'Priya Sharma',      'WP-EFG-5566', '09:30 AM', 'Catering for a private dinner',          'rejected'],
+        ['C02', 'G-003', '2026-08-19', 'Michael Torres',    'CP-HIJ-7788', '01:00 PM', 'Tutor visiting for weekly lesson',       'pending'],
+        ['C03', 'G-004', '2026-08-20', 'Rachel Green',      'WP-KLM-9900', '03:00 PM', 'Courier delivery – large parcels',      'pending'],
+      ];
+
+      for (const [unitNum, slot, gDate, vName, vVehicle, arrTime, reason, status] of guestBookings) {
+        const unitId = unitByNumber[unitNum];
+        if (unitId) {
+          await pool.query(
+            `INSERT INTO parking_management (unit_id, slot_number, type, guest_date, visitor_name, visitor_vehicle, arrival_time, reason, status)
+             VALUES (?, ?, 'guest', ?, ?, ?, ?, ?, ?)`,
+            [unitId, slot, gDate, vName, vVehicle, arrTime, reason, status]
+          );
+        }
+      }
+      console.log('  10 visitor parking booking requests seeded.');
+    } else {
+      console.log(`  Skipped visitor parking (already ${guestParkingCount[0][0].count} guest records).`);
+    }
+
     console.log('\n✅ Database migration and seeding completed successfully!');
     await pool.end();
     process.exit(0);
